@@ -1,0 +1,27 @@
+server:
+  httpListenAddr: ":3592"
+  adminAPI:
+    enabled: true
+    adminCredentials:
+      username: cerbos
+      passwordHash: JDJ5JDEwJE5HYnk4cTY3VTE1bFV1NlR2bmp3ME9QOXdXQXFROGtBb2lWREdEY2xXbzR6WnoxYWtSNWNDCgo=
+
+storage:
+  driver: "disk"
+  disk:
+    directory: /config/policies
+    watchForChanges: true
+
+audit:
+  enabled: true
+  accessLogsEnabled: true
+  decisionLogsEnabled: true
+  backend: file
+  file:
+    path: /config/audit.log
+    additionalPaths:
+      - stdout
+    logRotation:
+      maxFileAgeDays: 10 # Maximum age in days of old log files before they are deleted.
+      maxFileCount: 10 # Maximum number of old log files to retain.
+      maxFileSizeMB: 100 # Maximum size of individual log files in megabytes.
