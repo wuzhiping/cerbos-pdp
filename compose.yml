@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - "3592:3592"
+      - "3593:3593"
     volumes:
       - ./config:/config
     command: [server,--config=/config/.cerbos.yaml,--set=telemetry.disabled=true]
