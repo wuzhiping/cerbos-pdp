@@ -174,7 +174,14 @@
 
 
 
-剩下的一条 xfail 是**属性 schema 校验**:schema 已经部署了(两个引用都解析成功),但 `schema.enforcement` 默认是 `warn`,所以畸形属性是**被静默拒绝**而不是被**校验错误**挡下来。改成 `reject` 之后它会翻成 XPASS 并让套件失败——那正是提醒更新该文件的信号。
+**属性 schema 校验的 xfail 已经关上了。** 两个 schema 部署好了,`schema.enforcement: reject` 也开启了,畸形属性现在会让整个检查失败。
+
+关上的过程里有两个坑,都记在 `cerbos-policy/references/API-VALIDATION.md` 里了:
+
+1. **部署 schema 的 id 要用相对路径**(`principal.json`),不是 `cerbos:///principal.json`。推错了“看着像成功了”但每个请求都拒绝,而那行还读不回来。**在 `none` 模式下完全看不出来**——因为 `none` 模式下 PDP 根本不编译 schema。
+2. `reject` 模式不返回错误状态(响应是 200),且 **SDK 会静默丢掉 `validationErrors`**——它在 `results[]` 那一层,而 Python SDK 的响应模型里没有这个字段。要看错误得读原始 HTTP 响应。
+
+这条测试断言的也是 `reject` 模式的正确契约:响应是 200、动作是 DENY、`validationErrors` 在 `results[]` 那一层。原来的写法断言「抛 `PdpError`」,两处都不对——`reject` 不返回错误状态,而且 SDK 的响应模型根本没有 `validation_errors` 字段,会静默丢掉它们。
 
 
 ---

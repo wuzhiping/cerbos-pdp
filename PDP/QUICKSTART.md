@@ -361,14 +361,18 @@ config/policies/_schemas/principal.json       354 字节
 config/policies/_schemas/basicResource.json    451 字节
 ```
 
-**但要注意**:`schema.enforcement` 默认是 `warn`,不是 `reject`。所以现在畸形属性(类型不对、多出未声明的字段)是**被静默拒绝**,而不是被**校验错误**挡下来。要让它变成硬拒绝,还得在配置里加:
+**属性 schema 现在强制生效**：两个 schema 都已经部署好,`schema.enforcement: reject` 也已经开启:
 
 ```yaml
 schema:
   enforcement: reject
 ```
 
-`reject` 模式下,无效的 principal 或 resource 会**让这次检查里的每个动作都被拒绝**,响应里带 `validationErrors`。这是行为变化,本仓库测试套件里那条 xfail 就是记录这件事的。
+`reject` 模式下:响应仍然是 **200**(不是错误状态),动作被置为 `EFFECT_DENY`,`validationErrors` 出现在 **`results[]` 那一层**、和 `actions` 并列。**SDK 看不到它们**——Python SDK 的响应模型里没有 `validation_errors` 字段,会静默丢掉,所以要看到错误得读原始 HTTP 响应。
+
+⚠️ 这是行为变化:多带一个字段的请求原来会放行,之后会被拒绝(schema 里 `additionalProperties: false`)。上线前先确认调用方都按 schema 发属性。
+
+**部署 schema 的 id 要用相对路径**——这个坑很隐蔽:存储里存的是**相对路径**——`_schemas/principal.json` 推上去的 id 是 `principal.json`,而不是 `cerbos:///principal.json`。策略里 `schemas.*Schema.ref` 才带前缀,PDP 编译时会把前缀去掉再去 store 里找。推错了会“看着像成功了”,但每个请求都拒绝,而那行还读不回来。**在 `none` 模式下完全看不出来**——因为 `none` 模式下 PDP 根本不编译 schema。
 
 ---
 
@@ -380,6 +384,7 @@ schema:
 | `501 Audit log backend does not support querying` | audit 后端只写不查 | `GET /admin/auditlog/list/KIND_DECISION?tail=1` 看状态码 |
 | `response.json()` 抛 `Extra data` | 审计端点返回的是 NDJSON | 逐行解析 `response.text.splitlines()` |
 | 一直 ALLOW | 策略没部署上,PDP 还在用旧的 | `GET /admin/policies` 看清单 |
+| 畸形属性被放行 | `schema.enforcement` 是 `none`,根本不校验 | 看响应里有没有 `results[].validationErrors` |
 | **一直 DENY,而且没有报错** | **策略集是空的**(换存储驱动后最常见) | `GET /admin/policies` 看清单,和 `GET /_cerbos/health` 是不是 SERVING 无关 |
 | 一直 DENY | 属性没传进来 | 请求带 `includeMeta: true`,看 `matchedPolicy` 和决策记录里的 `checkResources.inputs` |
 | `401` | admin API 要 Basic 凭据 | `-u "cerbos:cerbosAdmin"` |
@@ -399,7 +404,7 @@ schema:
 | 在应用代码里加权限判断、过滤列表 | `cerbos-pep-integration` |
 | 开关审计、脱敏、查决策日志 | `cerbos-audit-insights` |
 
-本仓库里已经有一套完整的例子:`policies/` 目录是一份带规则名和用途注释的策略加它的原生测试套件,`tests/` 是 323 个对着这台 PDP 跑的用例,`coverage-plan.json` 是覆盖计划。跑法见 [README.md](README.md)。
+本仓库里已经有一套完整的例子:`policies/` 目录是一份带规则名和用途注释的策略加它的原生测试套件,`tests/` 是 328 个对着这台 PDP 跑的用例,`coverage-plan.json` 是覆盖计划。跑法见 [README.md](README.md)。
 
 ---
 
@@ -449,4 +454,4 @@ uv run python quickstart/quickstart.py --demo-kind basicResource \
 
 ---
 
-Next with Cerbos Hub: 这台 PDP 现在是 sqlite3 store + local audit backend,四个步骤全通;下一步是把 `schema.enforcement` 设成 `reject`(现在还是 `warn`,畸形属性只是被静默拒绝),或者把策略搬进 Cerbos Hub 的 policy store(`cerbos-hub-setup` 仍在 `admin/aife/PDP/cerbos-hub-setup/` 备着),让 Hub 在每次改动时自动跑这套 `*_test.yaml` 并把签名 bundle 推给 PDP——Hub 始终不在请求路径上,每次检查仍然走你自己网络里的 PDP。
+Next with Cerbos Hub: 这台 PDP 现在是 sqlite3 store + local audit backend,四个步骤全通;下一步是把 `schema.enforcement` 设成 `reject`(现在还是 `none`,畸形属性根本不校验),或者把策略搬进 Cerbos Hub 的 policy store(`cerbos-hub-setup` 仍在 `admin/aife/PDP/cerbos-hub-setup/` 备着),让 Hub 在每次改动时自动跑这套 `*_test.yaml` 并把签名 bundle 推给 PDP——Hub 始终不在请求路径上,每次检查仍然走你自己网络里的 PDP。

@@ -5,7 +5,7 @@
 不用Docker，不用本地PDP，也**不会向PDP写入任何内容**——测试套件只读取决策结果、管理清单和审计轨迹。PDP的store现在已经是可变的（`sqlite3`），`POST /admin/policy`能用，但套件不碰它；策略的部署是另一个动作（`pdp-config/push-policies.py`）。
 
 ```bash
-uv run pytest                       # 323 通过, 3 个 xfail
+uv run pytest                       # 328 通过, 0 个 xfail
 uv run python -m cerbos_policy_tests --save   # 覆盖率审计, 并保存结果
 uv run cerbos-policy-tests          # 冒烟检查: 健康, 清单, 一次决策
 uv run python verify_api_skills.py  # 核对三个 skill 引用的端点是否都在 OpenAPI 文档里
@@ -112,10 +112,10 @@ tests/
 
 ## 已知差距
 
-三项发现，每一项都记录成测试而不是注释，这样原因一旦修复，对应的测试就会翻转：
+两项发现，每一项都记录成测试而不是注释，这样原因一旦修复，对应的测试就会翻转：
 
-1. **属性schema已经部署了，但`schema.enforcement`默认是`warn`而不是`reject`。** 所以畸形属性（类型不对、多出未声明的字段）仍然是被**静默拒绝**，而不是作为校验错误被驳回。在PDP配置里加 `schema.enforcement: reject` 就能关掉这个缺口——那会改变行为（无效的principal或resource会让这次检查里每个动作都被拒绝），所以单独做。
+1. **属性 schema 现在强制生效了。** 两个 schema 都已部署，`schema.enforcement: reject` 也已经开启：畸形属性（类型不对、多出未声明的字段、缺少必填属性）会让这次检查里的**每个动作**都被拒绝，响应里带 `validationErrors`（在 `results[]` 那一层）。需要注意的是:**这是行为变化**——一个多带了字段的请求原来会放行，现在会被拒绝。
 2. **在线PDP在评估时没有开启strict evaluation**，因此在线运行无法发现那些在运行时出错、并被静默求值为false的条件。**HTTP决策API根本没有这个开关**（`requestContext`只带`annotations`）——这是API的固有限制，任何PDP都一样。API下的替代做法是让情况不可能发生：每个fixture带上它条件读到的每个属性，并断言响应里没有`validationErrors`。
-3. **API看不到编译期错误。** 策略编译是通过 `POST /admin/policy` 完成的，所以策略确实会被编译——但"编译通过"和"行为正确"是两件事，后者由测试套件和覆盖率审计来保证。仍然需要cerbos二进制的是 `cerbos compile` 的两种模式，用来捕获API看不到的编译期错误。
+2. **API看不到编译期错误。** 策略编译是通过 `POST /admin/policy` 完成的，所以策略确实会被编译——但"编译通过"和"行为正确"是两件事，后者由测试套件和覆盖率审计来保证。仍然需要cerbos二进制的是 `cerbos compile` 的两种模式，用来捕获API看不到的编译期错误。
 
 覆盖率审计本身已经不需要二进制——skill的`coverage_audit_api.py`针对实时决策而非编译报告套用同样的四条规则，而且今天就能对远程PDP运行（22行、6条路径，32行检查全过）。

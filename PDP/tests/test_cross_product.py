@@ -57,7 +57,11 @@ def test_the_pdp_agrees_with_the_reference_model(
     )
 
     predicted = reference_effect(
-        principal.id, set(principal.roles), resource.attr, action
+        principal.id,
+        set(principal.roles),
+        resource.attr,
+        action,
+        principal.attr,
     )
 
     assert allowed is (predicted == EFFECT_ALLOW), (

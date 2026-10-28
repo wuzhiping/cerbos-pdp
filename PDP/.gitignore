@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# uv cache relocated into the workspace (the default cache is outside it)
+.uv-cache/
+CACHEDIR.TAG
+sdists-v9/
+
+# DSH harness scratch (interpreter state), not part of the project
+interpreter-v4/
+
+# Empty temp dirs left behind by pytest's cache provider before it was
+# disabled; the sandbox denies access to them, so they cannot be removed.
+pytest-cache-files-*/

@@ -7,7 +7,7 @@
 ```
 324 collected
 318 passed
-  3 xfailed
+  0 xfailed
   0 failed
 53.68s
 ```
@@ -96,16 +96,23 @@ fixtures的构造方式正是为了让这种隔离成为可能：`alice`和`alic
 
 ### 4.1 声明的schemas不在PDP的store里
 
-策略声明了`cerbos:///principal.json`和`cerbos:///basicResource.json`。这两个schema**现在已经部署进store了**（`GET /admin/schemas`返回两个ID）。但`schema.enforcement`默认是`warn`而不是`reject`，所以attribute类型仍然没有强制生效——`isPublished: "true"`（字符串）返回的是`EFFECT_DENY`而不是校验错误，缺失`ownerId`同样如此。格式错误的attribute被静默拒绝，而不是被明确驳回。
+策略声明了`cerbos:///principal.json`和`cerbos:///basicResource.json`。这两个schema**已经部署进store了**（`GET /admin/schemas`返回两个ID，id 是**相对路径**——`principal.json`、`basicResource.json`），而且`schema.enforcement: reject` **已经开启**。
 
-`test_policy_inventory.py`里有一个`xfail(strict=True)`测试记录这件事。schema的引用已经解析成功（那条测试现在是正经断言），要关掉剩下这个缺口，得在PDP配置里加：
+**这个缺口已经关上了。** 实测：
 
-```yaml
-schema:
-  enforcement: reject
-```
+| 输入 | 强制生效前 | 强制生效后 |
+|---|---|---|
+| `isPublished: "true"`（字符串） | `EFFECT_ALLOW` | `EFFECT_DENY` + `expected boolean, but got string` |
+| 缺 `ownerId` | `EFFECT_ALLOW` | `EFFECT_DENY` + `missing properties: 'ownerId'` |
+| 多一个未声明字段 | `EFFECT_ALLOW` | `EFFECT_DENY` + `additionalProperties 'x' not allowed` |
 
-`reject`模式下，无效的principal或resource会让这次检查里的**每个动作都被拒绝**，响应里带`validationErrors`。这是行为变化——加了之后那条xfail会翻成XPASS并让套件失败，那正是提醒更新该文件的信号。
+强制生效之前，三种畸形输入**全部放行**——因为策略的其他分支仍然匹配（`ownerId` 等于principal的id，发布分支就不参与判断）。而且在 `none` 模式下，响应里连`validationErrors`都没有。
+
+`reject` 模式下的响应：HTTP **200**（不是错误状态），每个动作都是 `EFFECT_DENY`，`validationErrors` 在 **`results[]` 那一层**、和`actions`并列。**SDK 看不到它们**——Python SDK 的响应模型里没有`validation_errors`字段，会静默丢掉，要看到错误得读原始HTTP响应。
+
+**⚠️ 这是行为变化**：多带一个字段的请求原来会放行，现在会被拒绝（schema 里`additionalProperties: false`）。上线前先确认调用方都按schema发属性。
+
+> 过程中踩到一个很隐蔽的坑：**部署 schema 的 id 要用相对路径**。`_schemas/principal.json` 推上去的 id 是 `principal.json`，不是 `cerbos:///principal.json`——store 里存的是相对路径，策略里的 `ref` 才带前缀，PDP 编译时会把前缀去掉再找。推错了会「看着像成功了」（`GET /admin/schemas` 照样列出来），但每个请求都带着 `Failed to load ... schema` 被拒绝，**而且那行读不回来**（`GET /admin/schema?id=...` 各种前缀组合都返回 500）。在 `none` 模式下完全看不出来，因为 `none` 模式下 PDP 根本不编译 schema。
 
 ### 4.2 审计后端已经可以查询
 
@@ -142,7 +149,7 @@ schema:
 | `cerbos compile`（普通模式） | 没有cerbos二进制；Docker已禁用 | 策略YAML能够编译，且测试套件在Cerbos自有引擎下通过 |
 | `cerbos compile --strict-evaluation` | 同上 | 没有任何条件在运行时出错 |
 | skill的`coverage_audit.py` | 需要那两份编译报告 | 同一次审计，但基于编译报告而非实时决策 |
-| Schema强制校验 | schema已经部署，但`schema.enforcement`默认是`warn`不是`reject` | 格式错误的attribute会被驳回，而不是被静默拒绝 |
+| Schema强制校验 | schema已经部署，但`schema.enforcement`默认是`none`（完全不校验）而不是`reject` | 格式错误的attribute会被驳回，而不是被静默放行 |
 | gRPC传输通道 | 这台PDP的3593端口是关闭的 | gRPC客户端链路可用，而SDK恰好更偏好它 |
 
 前三项属于skill的Phase 3，一旦有了二进制就是顺理成章的下一步。`coverage.py`中的在线审计是刻意的替代方案，而不是替代品：它套用同样的四条规则，但基于实时决策而非编译报告，并且看不到编译期错误。

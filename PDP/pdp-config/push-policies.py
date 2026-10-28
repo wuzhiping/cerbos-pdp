@@ -12,9 +12,20 @@ DENY——从"全部允许"变成"全部拒绝",而且没有任何报错。
     2. 再推 policy(`POST /admin/policy`)
     3. 最后用 `GET /admin/policies` 核对清单
 
-schema 的 id 从文件路径推出来:`_schemas/principal.json` -> `cerbos:///principal.json`,
-和策略里 `schemas.principalSchema.ref` 写的那一串对得上。`_schemas/` 下的子目录
-同样适用:`_schemas/resources/foo.json` -> `cerbos:///resources/foo.json`。
+schema 的 id 是**相对于 `_schemas/` 的路径**,不带 `cerbos:///` 前缀:
+`_schemas/principal.json` -> `principal.json`,`_schemas/resources/foo.json` ->
+`resources/foo.json`。
+
+    这个前缀是个坑,踩过一次。**store 里存的是相对路径**,策略里
+    `schemas.principalSchema.ref` 写的是带前缀的 `cerbos:///principal.json`。
+    PDP 编译 schema 时会把 ref 的前缀去掉、再拿相对路径去 store 里找。
+    如果把 `cerbos:///principal.json` 当 id 推上去,`GET /admin/schemas` 会
+    照原样把它列出来(看着像成功了),但编译时永远找不到,每一个请求都会
+    带着 `Failed to load ... schema` 变成拒绝。而且**这种行读不回来**——
+    `GET /admin/schema?id=...` 各种前缀组合都返回 500。
+
+    在 `schema.enforcement: none`(默认)下这件事完全看不出来,因为 PDP
+    根本不编译 schema。改成 `reject` 之后,每一个请求都直接失败。
 
 只依赖标准库 + PyYAML。认证用 HTTP Basic,默认 cerbos / cerbosAdmin。
 """
@@ -79,7 +90,11 @@ def collect_schemas(policies_dir: pathlib.Path) -> list[dict]:
     for path in sorted(schemas_dir.rglob("*.json")):
         relative = path.relative_to(schemas_dir).as_posix()
         definition = base64.b64encode(path.read_bytes()).decode()
-        records.append({"id": f"cerbos:///{relative}", "definition": definition})
+        # The id is the path relative to _schemas/ -- no `cerbos:///` prefix.
+        # The store holds relative paths; the policy's ref carries the prefix,
+        # and the PDP strips it before looking the schema up. Pushing the
+        # prefixed form stores a row nothing can ever read.
+        records.append({"id": relative, "definition": definition})
     return records
 
 

@@ -25,11 +25,17 @@
 # conventional path is a one-line change to both files, best made on the
 # server where the policy is the original.
 #
-# ── Known gap ───────────────────────────────────────────────────────────────
-# Both schemas below are declared by the policy but are NOT in the PDP's
-# schema store (GET /admin/schemas returns {}), so attribute types are not
-# enforced at runtime. A malformed attribute is silently denied instead of
-# being rejected as a validation error. See tests/test_schema_enforcement.py.
+# ── Schemas ─────────────────────────────────────────────────────────────────────────────────
+# Both schemas below are deployed in the PDP's store and enforced
+# (schema.enforcement: reject). A malformed attribute now fails the whole
+# check: every action is EFFECT_DENY and the response carries
+# validationErrors on the result entry.
+#
+# The store keys a schema by its path RELATIVE to _schemas/ -- `principal.json`,
+# not `cerbos:///principal.json`. The ref in the policy keeps the prefix; the
+# PDP strips it before looking the schema up. Getting that wrong leaves a row
+# that lists fine but can never be read.
+
 
 apiVersion: api.cerbos.dev/v1
 

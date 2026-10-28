@@ -1,0 +1,87 @@
+# Cerbos PDP 推荐配置(Cerbos 0.57.0)
+#
+# 相对上游 wuzhiping/cerbos-pdp 的 config/.cerbos.yaml,改了三处:
+#
+#   1. storage.driver: disk -> sqlite3
+#      store 变成可变的,于是 POST /admin/policy 能成功 —— 策略部署从此走 API,
+#      不再需要往磁盘目录里拷文件。
+#   2. audit.backend: file -> local
+#      file 后端把决策写成 NDJSON 文件,按设计**不回答查询**;只有 local 后端
+#      能被 GET /admin/auditlog/list/{kind} 查到。
+#   3. 审计库和策略库都放在 /var/lib/cerbos(独立卷)
+#      上游把 audit.log 直接写进 /config/,也就是仓库的工作区里。
+#
+# ⚠️ 换存储驱动是一次迁移,不是改一行就完事:
+#    磁盘目录里的策略**不会**自动进数据库。切过去之后 PDP 的策略集是空的,
+#    在策略推过去之前,每个决策都会变成 DENY。
+#    正确顺序见 pdp-config/README.md,推送用 pdp-config/push-policies.py。
+#
+# 部署:python3 pdp-config/push-policies.py --pdp http://<pdp>:3592 \
+#         --policies config/policies
+# 校验:curl -s -u "cerbos:cerbosAdmin" http://<pdp>:3592/admin/policies
+# 读审计:curl -s -u "cerbos:cerbosAdmin" \
+#        'http://<pdp>:3592/admin/auditlog/list/KIND_DECISION?tail=5'
+
+server:
+  httpListenAddr: ":3592"
+  # gRPC 没有显式配置,走默认的 :3593。compose 里没有映射它,所以外网访问不到 ——
+  # 保持这样:决策 API 只需要 HTTP。
+
+  adminAPI:
+    enabled: true
+    adminCredentials:
+      username: cerbos
+      # cerbosAdmin 的 bcrypt 哈希,和上游一致,不要动
+      passwordHash: JDJ5JDEwJE5HYnk4cTY3VTE1bFV1NlR2bmp3ME9QOXdXQXFROGtBb2lWREdEY2xXbzR6WnoxYWtSNWNDCgo=
+
+storage:
+  # sqlite3 = 可变的 store,Admin API 能写。策略放在数据库里。
+  #
+  # dsn 里三个参数:
+  #   mode=rwc     文件不存在就创建。缺了它,PDP 第一次启动会因为找不到文件而起不来。
+  #   cache=shared 官方要求,配合连接池用。
+  #   _fk=true     打开外键约束。
+  #
+  # ⚠️ SQLite 不适合多副本同时写。单机 compose 没问题;
+  #    要横向扩,换 postgres / mysql 驱动(DSN 格式见 Cerbos 文档)。
+  driver: "sqlite3"
+  sqlite3:
+    # 放在独立卷上,不能是 /config/...,否则数据库会落进 git 工作区
+    dsn: "file:/var/lib/cerbos/cerbos.db?mode=rwc&cache=shared&_fk=true"
+
+schema:
+  # 属性 schema 的强制级别,三个取值:
+  #
+  #   none(默认) —— 完全不校验。属性不合 schema 也照样求值,
+  #                 响应里不会有 validationErrors。
+  #   warn       —— 校验,但只在日志里记警告,决策照常。
+  #   reject     —— 校验不通过就**拒绝这次检查里的每个动作**,
+  #                 响应里带上 validationErrors(在 results[] 那一层)。
+  #
+  # ⚠️ reject 是行为变化:一个多带了一个字段的请求,原来会放行,
+  #    之后会被拒绝。上线前先确认调用方都按 schema 发属性。
+  #
+  # 策略已经声明了这两个 schema,而且它们已经部署进 store 了
+  # (GET /admin/schemas 能查到),缺的只是这个开关。
+  enforcement: reject
+
+audit:
+  enabled: true
+  accessLogsEnabled: true
+  decisionLogsEnabled: true
+
+  # local = 内嵌 BadgerDB,能被 Admin API 查询
+  #   query : GET /admin/auditlog/list/{kind}
+  #   参数   : tail=N、since=3h、between.start/between.end、lookup=<callId>
+  # file = NDJSON 文件,只写不查
+  #   路径   : /var/lib/cerbos/audit.log
+  # hub  = 送到 Cerbos Hub,带脱敏和 Insights
+  #
+  # 注意:pipeOutput 是 hub 后端专属的(它在 audit.hub 下面,不在 audit 下面),
+  # 所以用 local 就没有"文件 + stdout"那份镜像了——二选一。
+  backend: local
+  local:
+    # 必须是独立卷上的路径,不能是 /config/...,否则会落进 git 工作区
+    storagePath: /var/lib/cerbos/audit
+    # 保留多久,默认就是 168h(7 天)
+    retentionPeriod: 168h
