@@ -1,0 +1,364 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestSuite.schema.json
+#
+# Native Cerbos test suite for basicResource.
+#
+# This file is the single source of truth for what the policy should do. It
+# is written in Cerbos' own `*_test.yaml` format so that `cerbos compile`
+# runs it unchanged once a cerbos binary is available, and the Python
+# harness in this repository executes the very same file against the running
+# PDP at 10.17.1.201:3592 — see tests/test_native_suite.py.
+#
+# Two rules shape how the cases below are written:
+#
+#   1. `input` is a cross product. Every principal listed is checked against
+#      every resource listed, for every action listed. A pair that is absent
+#      from `expected` is expected to be DENY for every action, and so is any
+#      action of a listed pair that `expected` does not mention. Only
+#      requests that share an expectation may therefore be grouped.
+#
+#   2. Each case isolates one rule, so that a failure names the rule that
+#      broke rather than a cross product of them. The matching coverage plan
+#      is coverage-plan.json at the repository root.
+#
+# `options.strictEvaluation` is declared here because a condition that
+# errors at runtime must deny rather than silently evaluate false. The live
+# PDP runs without it, so a live execution is a weaker guarantee on that one
+# axis — the suite records the intended behaviour, `cerbos compile
+# --strict-evaluation` enforces it.
+
+name: "BasicResourceTest"
+description: "Access rules for basicResource: administrators, owners and published resources."
+
+options:
+  strictEvaluation: true
+
+tests:
+  # ── R1: admin-all-actions ────────────────────────────────────────────────
+  - name: "Administrator may perform every action"
+    description: "R1 grants ADMIN every action; the wildcard covers actions no rule names."
+    input:
+      principals:
+        - admin
+      resources:
+        - alice_pub
+      actions:
+        - read
+        - create
+        - update
+        - delete
+    expected:
+      - principal: admin
+        resource: alice_pub
+        actions:
+          read: EFFECT_ALLOW
+          create: EFFECT_ALLOW
+          update: EFFECT_ALLOW
+          delete: EFFECT_ALLOW
+
+  - name: "Administrator and user roles combine"
+    description: "An ALLOW from any role grants the action, so both paths apply."
+    input:
+      principals:
+        - admin_and_user
+      resources:
+        - alice_pub
+      actions:
+        - read
+        - create
+        - update
+        - delete
+    expected:
+      - principal: admin_and_user
+        resource: alice_pub
+        actions:
+          read: EFFECT_ALLOW
+          create: EFFECT_ALLOW
+          update: EFFECT_ALLOW
+          delete: EFFECT_ALLOW
+
+  # ── R2: user-may-create ──────────────────────────────────────────────────
+  - name: "Any user may create any resource"
+    description: "R2 does not restrict creation; the cross product is uniform."
+    input:
+      principals:
+        - alice
+        - bob
+        - dave
+      resources:
+        - alice_pub
+        - bob_pub
+        - carl_unpub
+      actions:
+        - create
+    expected:
+      - principal: alice
+        resource: alice_pub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: alice
+        resource: bob_pub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: alice
+        resource: carl_unpub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: bob
+        resource: alice_pub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: bob
+        resource: bob_pub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: bob
+        resource: carl_unpub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: dave
+        resource: alice_pub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: dave
+        resource: bob_pub
+        actions:
+          create: EFFECT_ALLOW
+      - principal: dave
+        resource: carl_unpub
+        actions:
+          create: EFFECT_ALLOW
+
+  # ── R3: user-may-read-published-or-owned ─────────────────────────────────
+  - name: "Owner may read their published resource"
+    input:
+      principals:
+        - alice
+      resources:
+        - alice_pub
+      actions:
+        - read
+    expected:
+      - principal: alice
+        resource: alice_pub
+        actions:
+          read: EFFECT_ALLOW
+
+  - name: "Owner may read their unpublished resource"
+    description: "Ownership alone grants a read; publication is not required."
+    input:
+      principals:
+        - alice
+      resources:
+        - alice_unpub
+      actions:
+        - read
+    expected:
+      - principal: alice
+        resource: alice_unpub
+        actions:
+          read: EFFECT_ALLOW
+
+  - name: "Published resource may be read by a user who does not own it"
+    description: "The publication branch of R3 grants the read without ownership."
+    input:
+      principals:
+        - dave
+      resources:
+        - alice_pub
+      actions:
+        - read
+    expected:
+      - principal: dave
+        resource: alice_pub
+        actions:
+          read: EFFECT_ALLOW
+
+  - name: "Unpublished resource may not be read by a user who does not own it"
+    description: "Neither branch of R3 holds."
+    input:
+      principals:
+        - dave
+      resources:
+        - alice_unpub
+      actions:
+        - read
+    expected:
+      - principal: dave
+        resource: alice_unpub
+        actions:
+          read: EFFECT_DENY
+
+  # ── R4: user-may-update-or-delete-owned ──────────────────────────────────
+  - name: "Owner may update and delete their resource"
+    input:
+      principals:
+        - alice
+      resources:
+        - alice_pub
+      actions:
+        - update
+        - delete
+    expected:
+      - principal: alice
+        resource: alice_pub
+        actions:
+          update: EFFECT_ALLOW
+          delete: EFFECT_ALLOW
+
+  - name: "Non-owner may not update or delete"
+    description: "R4 requires ownership; publication does not substitute for it."
+    input:
+      principals:
+        - dave
+      resources:
+        - alice_pub
+      actions:
+        - update
+        - delete
+    expected:
+      - principal: dave
+        resource: alice_pub
+        actions:
+          update: EFFECT_DENY
+          delete: EFFECT_DENY
+
+  # ── Deny by default ──────────────────────────────────────────────────────
+  - name: "A role no rule names is denied everything"
+    input:
+      principals:
+        - guest
+      resources:
+        - alice_pub
+      actions:
+        - read
+        - create
+        - update
+        - delete
+    expected:
+      - principal: guest
+        resource: alice_pub
+        actions:
+          read: EFFECT_DENY
+          create: EFFECT_DENY
+          update: EFFECT_DENY
+          delete: EFFECT_DENY
+
+  - name: "Dropping the user role removes the ownership grants"
+    description: >
+      Same principal id, so ownership still matches; only the role set
+      differs. This is the isolated denial of the USER prerequisite on the
+      published and the owned paths alike.
+    input:
+      principals:
+        - alice_without_user_role
+      resources:
+        - alice_pub
+      actions:
+        - read
+        - update
+        - delete
+    expected:
+      - principal: alice_without_user_role
+        resource: alice_pub
+        actions:
+          read: EFFECT_DENY
+          update: EFFECT_DENY
+          delete: EFFECT_DENY
+
+  - name: "Dropping the user role removes the ownership read"
+    description: >
+      The owned but unpublished resource: with the USER role gone, the
+      ownership branch of the read rule cannot grant anything either.
+    input:
+      principals:
+        - alice_without_user_role
+      resources:
+        - alice_unpub
+      actions:
+        - read
+    expected:
+      - principal: alice_without_user_role
+        resource: alice_unpub
+        actions:
+          read: EFFECT_DENY
+
+  - name: "Dropping the user role removes the creation right"
+    input:
+      principals:
+        - alice_without_user_role
+      resources:
+        - alice_pub
+      actions:
+        - create
+    expected:
+      - principal: alice_without_user_role
+        resource: alice_pub
+        actions:
+          create: EFFECT_DENY
+
+  - name: "Dropping the admin role removes the wildcard grant"
+    description: >
+      Same principal id as `admin`; only the role set differs. The read is
+      still denied because the principal holds neither ADMIN nor USER.
+    input:
+      principals:
+        - admin_without_admin_role
+      resources:
+        - alice_pub
+      actions:
+        - read
+        - create
+    expected:
+      - principal: admin_without_admin_role
+        resource: alice_pub
+        actions:
+          read: EFFECT_DENY
+          create: EFFECT_DENY
+
+  # ── Action wildcards ─────────────────────────────────────────────────────
+  - name: "Administrator wildcard covers an action no rule names"
+    input:
+      principals:
+        - admin
+      resources:
+        - alice_pub
+      actions:
+        - publish
+    expected:
+      - principal: admin
+        resource: alice_pub
+        actions:
+          publish: EFFECT_ALLOW
+
+  - name: "User has no wildcard grant"
+    input:
+      principals:
+        - alice
+      resources:
+        - alice_pub
+      actions:
+        - publish
+    expected:
+      - principal: alice
+        resource: alice_pub
+        actions:
+          publish: EFFECT_DENY
+
+  # ── Schema handling ──────────────────────────────────────────────────────
+  - name: "Create ignores resource schema validation"
+    description: >
+      The resource is missing the required isPublished attribute. The policy
+      declares resourceSchema.ignoreWhen for the create action, so the
+      resource is not validated and creation is allowed.
+    input:
+      principals:
+        - alice
+      resources:
+        - incomplete
+      actions:
+        - create
+    expected:
+      - principal: alice
+        resource: incomplete
+        actions:
+          create: EFFECT_ALLOW

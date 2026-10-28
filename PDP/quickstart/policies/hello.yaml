@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/Policy.schema.json
+#
+# 最简到不能再简、但还能说明点什么的策略:一个资源、一个动作、一个角色。
+#
+#   user 可以 read hello   -> ALLOW
+#   其他人                  -> DENY(Cerbos 默认拒绝)
+#
+# 通过 Admin API 部署到 PDP:
+#   POST /admin/policy
+apiVersion: api.cerbos.dev/v1
+
+resourcePolicy:
+  resource: hello
+  version: default
+
+  schemas:
+    resourceSchema:
+      ref: cerbos:///hello.json
+
+  rules:
+    # 目的:任何 user 角色都可以 read 一个 hello 资源。
+    - name: user-may-read
+      actions:
+        - read
+      roles:
+        - user
+      effect: EFFECT_ALLOW

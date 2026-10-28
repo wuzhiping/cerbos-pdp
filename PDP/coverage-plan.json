@@ -1,0 +1,257 @@
+{
+  "paths": [
+    {
+      "id": "admin-all",
+      "kind": "basicResource",
+      "requires": ["admin-role"]
+    },
+    {
+      "id": "user-create",
+      "kind": "basicResource",
+      "requires": ["user-role"]
+    },
+    {
+      "id": "user-read-published",
+      "kind": "basicResource",
+      "requires": ["user-role", "published"]
+    },
+    {
+      "id": "user-read-owner",
+      "kind": "basicResource",
+      "requires": ["user-role", "owner"]
+    },
+    {
+      "id": "user-update-owner",
+      "kind": "basicResource",
+      "requires": ["user-role", "owner"]
+    },
+    {
+      "id": "user-delete-owner",
+      "kind": "basicResource",
+      "requires": ["user-role", "owner"]
+    }
+  ],
+
+  "rows": [
+    {
+      "id": "admin-read-alice-pub",
+      "principal": "admin",
+      "resource": "alice_pub",
+      "action": "read",
+      "effect": "EFFECT_ALLOW"
+    },
+    {
+      "id": "admin-missing-admin-role-read",
+      "principal": "admin_without_admin_role",
+      "resource": "alice_pub",
+      "action": "read",
+      "effect": "EFFECT_DENY",
+      "control": "admin-read-alice-pub",
+      "change": "principal.roles",
+      "path": "admin-all",
+      "prerequisite": "admin-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+    {
+      "id": "admin-create-alice-pub",
+      "principal": "admin",
+      "resource": "alice_pub",
+      "action": "create",
+      "effect": "EFFECT_ALLOW"
+    },
+    {
+      "id": "admin-missing-admin-role-create",
+      "principal": "admin_without_admin_role",
+      "resource": "alice_pub",
+      "action": "create",
+      "effect": "EFFECT_DENY",
+      "control": "admin-create-alice-pub",
+      "change": "principal.roles",
+      "path": "admin-all",
+      "prerequisite": "admin-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+    {
+      "id": "admin-publish-alice-pub",
+      "principal": "admin",
+      "resource": "alice_pub",
+      "action": "publish",
+      "effect": "EFFECT_ALLOW"
+    },
+    {
+      "id": "user-publish-alice-pub",
+      "principal": "alice",
+      "resource": "alice_pub",
+      "action": "publish",
+      "effect": "EFFECT_DENY"
+    },
+
+    {
+      "id": "alice-create-alice-pub",
+      "principal": "alice",
+      "resource": "alice_pub",
+      "action": "create",
+      "effect": "EFFECT_ALLOW"
+    },
+    {
+      "id": "alice-missing-user-role-create",
+      "principal": "alice_without_user_role",
+      "resource": "alice_pub",
+      "action": "create",
+      "effect": "EFFECT_DENY",
+      "control": "alice-create-alice-pub",
+      "change": "principal.roles",
+      "path": "user-create",
+      "prerequisite": "user-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+
+    {
+      "id": "dave-read-published-alice-pub",
+      "principal": "dave",
+      "resource": "alice_pub",
+      "action": "read",
+      "effect": "EFFECT_ALLOW",
+      "facts": { "resource.attr.isPublished": true, "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "dave-read-unpublished-alice-unpub",
+      "principal": "dave",
+      "resource": "alice_unpub",
+      "action": "read",
+      "effect": "EFFECT_DENY",
+      "control": "dave-read-published-alice-pub",
+      "change": "resource.attr.isPublished",
+      "path": "user-read-published",
+      "prerequisite": "published",
+      "facts": { "resource.attr.isPublished": false, "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "alice-read-alice-pub",
+      "principal": "alice",
+      "resource": "alice_pub",
+      "action": "read",
+      "effect": "EFFECT_ALLOW",
+      "facts": { "resource.attr.isPublished": true }
+    },
+    {
+      "id": "alice-missing-user-role-read-alice-pub",
+      "principal": "alice_without_user_role",
+      "resource": "alice_pub",
+      "action": "read",
+      "effect": "EFFECT_DENY",
+      "control": "alice-read-alice-pub",
+      "change": "principal.roles",
+      "path": "user-read-published",
+      "prerequisite": "user-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+
+    {
+      "id": "alice-read-owned-alice-unpub",
+      "principal": "alice",
+      "resource": "alice_unpub",
+      "action": "read",
+      "effect": "EFFECT_ALLOW",
+      "facts": { "resource.attr.ownerId": "alice", "resource.attr.isPublished": false }
+    },
+    {
+      "id": "dave-read-owned-alice-unpub",
+      "principal": "dave",
+      "resource": "alice_unpub",
+      "action": "read",
+      "effect": "EFFECT_DENY",
+      "control": "alice-read-owned-alice-unpub",
+      "change": "principal.id",
+      "path": "user-read-owner",
+      "prerequisite": "owner",
+      "facts": { "principal.id": "dave", "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "alice-missing-user-role-read-alice-unpub",
+      "principal": "alice_without_user_role",
+      "resource": "alice_unpub",
+      "action": "read",
+      "effect": "EFFECT_DENY",
+      "control": "alice-read-owned-alice-unpub",
+      "change": "principal.roles",
+      "path": "user-read-owner",
+      "prerequisite": "user-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+
+    {
+      "id": "alice-update-alice-pub",
+      "principal": "alice",
+      "resource": "alice_pub",
+      "action": "update",
+      "effect": "EFFECT_ALLOW",
+      "facts": { "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "dave-update-alice-pub",
+      "principal": "dave",
+      "resource": "alice_pub",
+      "action": "update",
+      "effect": "EFFECT_DENY",
+      "control": "alice-update-alice-pub",
+      "change": "principal.id",
+      "path": "user-update-owner",
+      "prerequisite": "owner",
+      "facts": { "principal.id": "dave", "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "alice-missing-user-role-update-alice-pub",
+      "principal": "alice_without_user_role",
+      "resource": "alice_pub",
+      "action": "update",
+      "effect": "EFFECT_DENY",
+      "control": "alice-update-alice-pub",
+      "change": "principal.roles",
+      "path": "user-update-owner",
+      "prerequisite": "user-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+
+    {
+      "id": "alice-delete-alice-pub",
+      "principal": "alice",
+      "resource": "alice_pub",
+      "action": "delete",
+      "effect": "EFFECT_ALLOW",
+      "facts": { "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "dave-delete-alice-pub",
+      "principal": "dave",
+      "resource": "alice_pub",
+      "action": "delete",
+      "effect": "EFFECT_DENY",
+      "control": "alice-delete-alice-pub",
+      "change": "principal.id",
+      "path": "user-delete-owner",
+      "prerequisite": "owner",
+      "facts": { "principal.id": "dave", "resource.attr.ownerId": "alice" }
+    },
+    {
+      "id": "alice-missing-user-role-delete-alice-pub",
+      "principal": "alice_without_user_role",
+      "resource": "alice_pub",
+      "action": "delete",
+      "effect": "EFFECT_DENY",
+      "control": "alice-delete-alice-pub",
+      "change": "principal.roles",
+      "path": "user-delete-owner",
+      "prerequisite": "user-role",
+      "facts": { "principal.roles": ["GUEST"] }
+    },
+
+    {
+      "id": "alice-create-incomplete",
+      "principal": "alice",
+      "resource": "incomplete",
+      "action": "create",
+      "effect": "EFFECT_ALLOW"
+    }
+  ]
+}

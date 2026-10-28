@@ -1,0 +1,39 @@
+Coverage audit against the live PDP
+plan   : C:\Users\shawoo\Desktop\PDP\coverage-plan.json
+policies: C:\Users\shawoo\Desktop\PDP\policies
+rows   : 22   paths: 6
+
+PASS admin-read-alice-pub: basicResource read admin / alice_pub -> EFFECT_ALLOW
+PASS admin-missing-admin-role-read: vs admin-read-alice-pub: principal.roles ['ADMIN'] -> ['GUEST']
+PASS admin-create-alice-pub: basicResource create admin / alice_pub -> EFFECT_ALLOW
+PASS admin-missing-admin-role-create: vs admin-create-alice-pub: principal.roles ['ADMIN'] -> ['GUEST']
+PASS admin-publish-alice-pub: basicResource publish admin / alice_pub -> EFFECT_ALLOW
+PASS user-publish-alice-pub: basicResource publish alice / alice_pub -> EFFECT_DENY
+PASS alice-create-alice-pub: basicResource create alice / alice_pub -> EFFECT_ALLOW
+PASS alice-missing-user-role-create: vs alice-create-alice-pub: principal.roles ['USER'] -> ['GUEST']
+PASS dave-read-published-alice-pub: basicResource read dave / alice_pub -> EFFECT_ALLOW
+PASS dave-read-unpublished-alice-unpub: vs dave-read-published-alice-pub: resource.attr.isPublished True -> False
+PASS alice-read-alice-pub: basicResource read alice / alice_pub -> EFFECT_ALLOW
+PASS alice-missing-user-role-read-alice-pub: vs alice-read-alice-pub: principal.roles ['USER'] -> ['GUEST']
+PASS alice-read-owned-alice-unpub: basicResource read alice / alice_unpub -> EFFECT_ALLOW
+PASS dave-read-owned-alice-unpub: vs alice-read-owned-alice-unpub: principal.id 'alice' -> 'dave'
+PASS alice-missing-user-role-read-alice-unpub: vs alice-read-owned-alice-unpub: principal.roles ['USER'] -> ['GUEST']
+PASS alice-update-alice-pub: basicResource update alice / alice_pub -> EFFECT_ALLOW
+PASS dave-update-alice-pub: vs alice-update-alice-pub: principal.id 'alice' -> 'dave'
+PASS alice-missing-user-role-update-alice-pub: vs alice-update-alice-pub: principal.roles ['USER'] -> ['GUEST']
+PASS alice-delete-alice-pub: basicResource delete alice / alice_pub -> EFFECT_ALLOW
+PASS dave-delete-alice-pub: vs alice-delete-alice-pub: principal.id 'alice' -> 'dave'
+PASS alice-missing-user-role-delete-alice-pub: vs alice-delete-alice-pub: principal.roles ['USER'] -> ['GUEST']
+PASS alice-create-incomplete: basicResource create alice / incomplete -> EFFECT_ALLOW
+PASS path admin-all (basicResource) prerequisite admin-role: admin-missing-admin-role-read, admin-missing-admin-role-create
+PASS path user-create (basicResource) prerequisite user-role: alice-missing-user-role-create
+PASS path user-read-published (basicResource) prerequisite user-role: alice-missing-user-role-read-alice-pub
+PASS path user-read-published (basicResource) prerequisite published: dave-read-unpublished-alice-unpub
+PASS path user-read-owner (basicResource) prerequisite user-role: alice-missing-user-role-read-alice-unpub
+PASS path user-read-owner (basicResource) prerequisite owner: dave-read-owned-alice-unpub
+PASS path user-update-owner (basicResource) prerequisite user-role: alice-missing-user-role-update-alice-pub
+PASS path user-update-owner (basicResource) prerequisite owner: dave-update-alice-pub
+PASS path user-delete-owner (basicResource) prerequisite user-role: alice-missing-user-role-delete-alice-pub
+PASS path user-delete-owner (basicResource) prerequisite owner: dave-delete-alice-pub
+
+no failures

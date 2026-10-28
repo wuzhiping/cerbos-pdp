@@ -1,0 +1,35 @@
+[project]
+name = "cerbos-policy-tests"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "gilpin", email = "wuzhiping@qq.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cerbos>=0.16.1",
+    "cerbos-sqlalchemy>=0.4.0",
+    "pyyaml>=6.0.3",
+    "sqlalchemy<2.1",
+]
+
+[project.scripts]
+cerbos-policy-tests = "cerbos_policy_tests:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "bcrypt>=5.0.0",
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The cache provider creates a temp directory beside the project and renames it
+# into place, which the Windows sandbox denies. The cache buys nothing here.
+addopts = "-ra --strict-markers -p no:cacheprovider"
+xfail_strict = true

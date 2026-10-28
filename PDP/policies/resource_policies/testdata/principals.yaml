@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestFixture/Principals.schema.json
+#
+# Shared principal fixtures for every *_test.yaml in this directory.
+#
+# The fixture keys are labels. What matters for coverage isolation is the
+# *content*: several fixtures deliberately share an `id` and differ only in
+# `roles`, so that a denial can be attributed to the missing role rather than
+# to a different person. `alice` and `alice_without_user_role` are both id
+# `alice` — the resource ownership check still matches, and only the role
+# set differs.
+
+principals:
+  # Administrators are unrestricted.
+  admin:
+    id: "admin1"
+    roles:
+      - "ADMIN"
+
+  # An administrator who also holds the USER role: the roles combine, so the
+  # USER-granted actions are allowed on both paths.
+  admin_and_user:
+    id: "admin2"
+    roles:
+      - "ADMIN"
+      - "USER"
+
+  # Same id as `admin`, without the ADMIN role. Isolates the ADMIN
+  # prerequisite: no other field differs from the `admin` control.
+  admin_without_admin_role:
+    id: "admin1"
+    roles:
+      - "GUEST"
+
+  # A regular user, owner of `alice_pub` and `alice_unpub`.
+  alice:
+    id: "alice"
+    roles:
+      - "USER"
+
+  # Same id as `alice`, without the USER role. Isolates the USER
+  # prerequisite: ownership still matches, only the role set differs.
+  alice_without_user_role:
+    id: "alice"
+    roles:
+      - "GUEST"
+
+  # A regular user, owner of `bob_pub` and `bob_unpub`.
+  bob:
+    id: "bob"
+    roles:
+      - "USER"
+
+  # A regular user who owns nothing: reads only what is published.
+  dave:
+    id: "dave"
+    roles:
+      - "USER"
+
+  # A role no rule names. Deny by default must hold.
+  guest:
+    id: "guest"
+    roles:
+      - "GUEST"

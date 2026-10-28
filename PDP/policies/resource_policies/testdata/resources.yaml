@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestFixture/Resources.schema.json
+#
+# Shared resource fixtures for every *_test.yaml in this directory.
+#
+# Ownership and publication state vary independently, so the two conditions
+# in the read rule can be told apart: `alice_pub` and `alice_unpub` differ
+# only in `isPublished`, `alice_unpub` and `carl_unpub` differ only in
+# `ownerId`.
+
+resources:
+  # Owned by alice and published.
+  alice_pub:
+    kind: "basicResource"
+    id: "doc-alice-pub"
+    attr:
+      ownerId: "alice"
+      isPublished: true
+
+  # Owned by alice, not published. Differs from `alice_pub` only in
+  # `isPublished`.
+  alice_unpub:
+    kind: "basicResource"
+    id: "doc-alice-unpub"
+    attr:
+      ownerId: "alice"
+      isPublished: false
+
+  # Owned by bob and published.
+  bob_pub:
+    kind: "basicResource"
+    id: "doc-bob-pub"
+    attr:
+      ownerId: "bob"
+      isPublished: true
+
+  # Owned by bob, not published.
+  bob_unpub:
+    kind: "basicResource"
+    id: "doc-bob-unpub"
+    attr:
+      ownerId: "bob"
+      isPublished: false
+
+  # Owned by nobody in the fixtures, not published. Differs from
+  # `alice_unpub` only in `ownerId`.
+  carl_unpub:
+    kind: "basicResource"
+    id: "doc-carl-unpub"
+    attr:
+      ownerId: "carl"
+      isPublished: false
+
+  # Missing `isPublished`, which the resource schema requires. The policy's
+  # `resourceSchema.ignoreWhen` skips resource validation for the create
+  # action, so this fixture can still be created. It is owned by carol so
+  # that alice can neither own nor read it.
+  incomplete:
+    kind: "basicResource"
+    id: "doc-incomplete"
+    attr:
+      ownerId: "carl"

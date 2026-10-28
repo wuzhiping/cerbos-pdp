@@ -1,0 +1,26 @@
+{
+  "requestId": "quickstart-allow",
+  "includeMeta": true,
+  "principal": {
+    "id": "alice",
+    "roles": [
+      "user"
+    ],
+    "policyVersion": "default"
+  },
+  "resources": [
+    {
+      "resource": {
+        "kind": "hello",
+        "id": "greeting-alice",
+        "policyVersion": "default",
+        "attr": {
+          "name": "world"
+        }
+      },
+      "actions": [
+        "read"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/Policy.schema.json
+#
+# basicResource — the policy served by the PDP at 10.17.1.201:3592.
+#
+# RECONSTRUCTED from the running PDP via
+#   GET /admin/policy?id=basicResource.yaml
+# The admin API returns the *compiled* policy, so the original file's comments
+# are not recoverable. The rules are semantically identical to what the PDP
+# serves. The rule `name` fields below were added by this reconstruction:
+# the served policy carries none, and a rule name is what shows up as
+# `src` in decision outputs and audit entries.
+#
+# Observed serving metadata:
+#   sourceFile : basicResource.yaml
+#   driver     : disk
+#   hash       : 11223280716740282385
+#   apiVersion : api.cerbos.dev/v1
+#
+# ── Schema reference deviation ──────────────────────────────────────────────
+# The documented convention is `cerbos:///resources/{resource_name}.json`,
+# which would put the file at `_schemas/resources/basicResource.json`. The
+# deployed policy references `cerbos:///basicResource.json`, so the schema
+# lives at `_schemas/basicResource.json` here — the source of truth has to
+# resolve the same reference the deployed policy uses. Moving to the
+# conventional path is a one-line change to both files, best made on the
+# server where the policy is the original.
+#
+# ── Known gap ───────────────────────────────────────────────────────────────
+# Both schemas below are declared by the policy but are NOT in the PDP's
+# schema store (GET /admin/schemas returns {}), so attribute types are not
+# enforced at runtime. A malformed attribute is silently denied instead of
+# being rejected as a validation error. See tests/test_schema_enforcement.py.
+
+apiVersion: api.cerbos.dev/v1
+
+resourcePolicy:
+  resource: basicResource
+  version: default
+
+  schemas:
+    principalSchema:
+      ref: cerbos:///principal.json
+    resourceSchema:
+      ref: cerbos:///basicResource.json
+      # A record being created has no owner and no publication state yet, so
+      # the resource attributes are not validated for the create action.
+      ignoreWhen:
+        actions:
+          - create
+
+  rules:
+    # Purpose: administrators are not subject to ownership or publication
+    # checks, so they can operate on any basicResource.
+    - name: admin-all-actions
+      actions:
+        - "*"
+      roles:
+        - ADMIN
+      effect: EFFECT_ALLOW
+
+    # Purpose: any authenticated user may create a new basicResource. The
+    # resource has no owner yet, so creation is not restricted.
+    - name: user-may-create
+      actions:
+        - create
+      roles:
+        - USER
+      effect: EFFECT_ALLOW
+
+    # Purpose: a user may read a resource that is published, or one they own.
+    # Reading is the only action that does not require ownership.
+    - name: user-may-read-published-or-owned
+      actions:
+        - read
+      roles:
+        - USER
+      condition:
+        match:
+          any:
+            of:
+              - expr: request.resource.attr.isPublished == true
+              - expr: request.resource.attr.ownerId == request.principal.id
+      effect: EFFECT_ALLOW
+
+    # Purpose: a user may modify or remove only a resource they own.
+    - name: user-may-update-or-delete-owned
+      actions:
+        - update
+        - delete
+      roles:
+        - USER
+      condition:
+        match:
+          expr: request.resource.attr.ownerId == request.principal.id
+      effect: EFFECT_ALLOW

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "department": {
+      "type": "string",
+      "description": "Department the principal belongs to."
+    },
+    "tenant": {
+      "type": "string",
+      "description": "Tenant the principal acts within."
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,26 @@
+{
+  "requestId": "quickstart-deny",
+  "includeMeta": true,
+  "principal": {
+    "id": "bob",
+    "roles": [
+      "guest"
+    ],
+    "policyVersion": "default"
+  },
+  "resources": [
+    {
+      "resource": {
+        "kind": "hello",
+        "id": "greeting-bob",
+        "policyVersion": "default",
+        "attr": {
+          "name": "world"
+        }
+      },
+      "actions": [
+        "read"
+      ]
+    }
+  ]
+}

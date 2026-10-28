@@ -1,0 +1,28 @@
+{
+  "policies": [
+    {
+      "apiVersion": "api.cerbos.dev/v1",
+      "resourcePolicy": {
+        "resource": "hello",
+        "version": "default",
+        "schemas": {
+          "resourceSchema": {
+            "ref": "cerbos:///hello.json"
+          }
+        },
+        "rules": [
+          {
+            "name": "user-may-read",
+            "actions": [
+              "read"
+            ],
+            "roles": [
+              "user"
+            ],
+            "effect": "EFFECT_ALLOW"
+          }
+        ]
+      }
+    }
+  ]
+}

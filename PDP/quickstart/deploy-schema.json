@@ -1,0 +1,8 @@
+{
+  "schemas": [
+    {
+      "id": "cerbos:///hello.json",
+      "definition": "eyIkc2NoZW1hIjogImh0dHBzOi8vanNvbi1zY2hlbWEub3JnL2RyYWZ0LzIwMjAtMTIvc2NoZW1hIiwgInR5cGUiOiAib2JqZWN0IiwgInByb3BlcnRpZXMiOiB7Im5hbWUiOiB7InR5cGUiOiAic3RyaW5nIiwgImRlc2NyaXB0aW9uIjogIldobyB0aGUgZ3JlZXRpbmcgaXMgZm9yLiJ9fSwgImFkZGl0aW9uYWxQcm9wZXJ0aWVzIjogZmFsc2V9"
+    }
+  ]
+}
