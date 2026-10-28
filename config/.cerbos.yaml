@@ -55,3 +55,19 @@ audit:
     storagePath: /var/lib/cerbos/audit
     # 保留多久,默认就是 168h(7 天)
     retentionPeriod: 168h
+
+schema:
+  # 属性 schema 的强制级别,三个取值:
+  #
+  #   none(默认) —— 完全不校验。属性不合 schema 也照样求值,
+  #                 响应里不会有 validationErrors。
+  #   warn       —— 校验,但只在日志里记警告,决策照常。
+  #   reject     —— 校验不通过就**拒绝这次检查里的每个动作**,
+  #                 响应里带上 validationErrors(在 results[] 那一层)。
+  #
+  # ⚠️ reject 是行为变化:一个多带了一个字段的请求,原来会放行,
+  #    之后会被拒绝。上线前先确认调用方都按 schema 发属性。
+  #
+  # 策略已经声明了这两个 schema,而且它们已经部署进 store 了
+  # (GET /admin/schemas 能查到),缺的只是这个开关。
+  enforcement: reject
