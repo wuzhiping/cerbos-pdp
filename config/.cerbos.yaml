@@ -7,21 +7,51 @@ server:
       passwordHash: JDJ5JDEwJE5HYnk4cTY3VTE1bFV1NlR2bmp3ME9QOXdXQXFROGtBb2lWREdEY2xXbzR6WnoxYWtSNWNDCgo=
 
 storage:
-  driver: "disk"
-  disk:
-    directory: /config/policies
-    watchForChanges: true
-
+  # driver: "disk"
+  # disk:
+  #   directory: /config/policies
+  #   watchForChanges: true
+  
+  # sqlite3 = 可变的 store,Admin API 能写。策略放在数据库里。
+  #
+  # dsn 里三个参数:
+  #   mode=rwc     文件不存在就创建。缺了它,PDP 第一次启动会因为找不到文件而起不来。
+  #   cache=shared 官方要求,配合连接池用。
+  #   _fk=true     打开外键约束。
+  #
+  # ⚠️ SQLite 不适合多副本同时写。单机 compose 没问题;
+  #    要横向扩,换 postgres / mysql 驱动(DSN 格式见 Cerbos 文档)。
+  driver: "sqlite3"
+  sqlite3:
+    # 放在独立卷上,不能是 /config/...,否则数据库会落进 git 工作区
+    dsn: "file:/var/lib/cerbos/cerbos.db?mode=rwc&cache=shared&_fk=true"
 audit:
   enabled: true
   accessLogsEnabled: true
   decisionLogsEnabled: true
-  backend: file
-  file:
-    path: /config/audit.log
-    additionalPaths:
-      - stdout
-    logRotation:
-      maxFileAgeDays: 10 # Maximum age in days of old log files before they are deleted.
-      maxFileCount: 10 # Maximum number of old log files to retain.
-      maxFileSizeMB: 100 # Maximum size of individual log files in megabytes.
+  
+  # backend: file
+  # file:
+  #   path: /config/audit.log
+  #   additionalPaths:
+  #     - stdout
+  #   logRotation:
+  #     maxFileAgeDays: 10 # Maximum age in days of old log files before they are deleted.
+  #     maxFileCount: 10 # Maximum number of old log files to retain.
+  #     maxFileSizeMB: 100 # Maximum size of individual log files in megabytes.
+
+  # local = 内嵌 BadgerDB,能被 Admin API 查询
+  #   query : GET /admin/auditlog/list/{kind}
+  #   参数   : tail=N、since=3h、between.start/between.end、lookup=<callId>
+  # file = NDJSON 文件,只写不查
+  #   路径   : /var/lib/cerbos/audit.log
+  # hub  = 送到 Cerbos Hub,带脱敏和 Insights
+  #
+  # 注意:pipeOutput 是 hub 后端专属的(它在 audit.hub 下面,不在 audit 下面),
+  # 所以用 local 就没有"文件 + stdout"那份镜像了——二选一。
+  backend: local
+  local:
+    # 必须是独立卷上的路径,不能是 /config/...,否则会落进 git 工作区
+    storagePath: /var/lib/cerbos/audit
+    # 保留多久,默认就是 168h(7 天)
+    retentionPeriod: 168h
