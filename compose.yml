@@ -3,6 +3,14 @@ services:
   cerbos:
     image: ghcr.io/cerbos/cerbos:0.57.0
     restart: unless-stopped
+    environment:
+      OTEL_SERVICE_NAME: cerbos-pdp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_TRACES_SAMPLER: always_on
+
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: https://otel.feg.cn/api/public/otel/v1/traces
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: "Authorization=Basic cGstbGYtN2M4ZTYzYWMtOWI1OC00ZjI3LTljNTMtOWZhNWQ2NzQxMmNiOnNrLWxmLTI5OTQ5ZTBmLTVjYzEtNDQ2ZC04M2JmLTU1NjI4YjAxNTJkYw=="
     ports:
       - "3592:3592"
       - "3593:3593"
