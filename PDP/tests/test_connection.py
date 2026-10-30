@@ -37,14 +37,26 @@ def test_admin_api_accepts_credentials():
 
 
 @pytest.mark.parametrize("port", [3593])
-def test_grpc_port_is_not_exposed(port):
-    """Document why the HTTP client is used: this PDP exposes no gRPC listener.
+def test_the_grpc_port_does_not_serve_the_http_api(port):
+    """Document why the HTTP client is used, whatever state the gRPC port is in.
 
-    The Python SDK prefers gRPC, so the suite must not silently assume it.
+    The Python SDK ships both an HTTP client (installed) and a gRPC client
+    (needs the ``cerbos[grpc]`` extra), and the gRPC client is the one the
+    SDK prefers. The suite must not silently assume either.
 
-    A closed port usually answers with a TCP refusal, which surfaces as
-    ``ConnectError``. A firewall that drops the packet instead surfaces as
-    ``ConnectTimeout`` — a sibling class, not a subclass — so accept both.
+    What matters is not whether the port is open, but that **it never serves
+    the HTTP API** — so nobody points an HTTP client at it and gets confused
+    by a protocol error:
+
+    * port closed (TCP refusal) → ``ConnectError``
+    * port dropped by a firewall → ``ConnectTimeout``
+    * port open and serving gRPC → the peer resets the connection
+      (``ReadError``) or rejects the request line (``RemoteProtocolError``)
+
+    All three are transport-level failures, and all three are subclasses of
+    ``httpx.TransportError``. An HTTP response of any status would *not* be,
+    which is exactly what this test is checking for.
     """
-    with pytest.raises((httpx.ConnectError, httpx.ConnectTimeout)):
-        httpx.get(f"http://{pdp_url().split('//')[1].split(':')[0]}:{port}/", timeout=3.0)
+    url = f"http://{pdp_url().split('//')[1].split(':')[0]}:{port}/"
+    with pytest.raises(httpx.TransportError):
+        httpx.get(url, timeout=3.0)
