@@ -17,7 +17,7 @@ from sqlalchemy import Boolean, Column, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from cerbos_policy_tests.fixtures import load_fixtures
-from cerbos_policy_tests.config import POLICY_DIR
+from cerbos_policy_tests.config import BASIC_RESOURCE_POLICY_DIR
 from cerbos_policy_tests.pep import authorize
 from cerbos_policy_tests.queryplan import plan_for, readable_ids, sql_select
 
@@ -41,7 +41,7 @@ ATTR_MAP = {
     "request.resource.attr.isPublished": BasicResourceRow.is_published,
 }
 
-FIXTURES = load_fixtures(POLICY_DIR)
+FIXTURES = load_fixtures(BASIC_RESOURCE_POLICY_DIR)
 
 
 @pytest.fixture(scope="module")

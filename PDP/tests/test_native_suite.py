@@ -1,9 +1,18 @@
-"""The native Cerbos test suite, executed against the running PDP.
+"""The native Cerbos test suites, executed against the running PDP.
 
-`policies/resource_policies/basicResource_test.yaml` is written in Cerbos'
-own format, so `cerbos compile` runs it unchanged once a binary is
-available. This module runs the very same file against the PDP at
-10.17.1.201:3592 — the file is the single source of truth, not a copy of it.
+Every `*_test.yaml` under `policies/` is written in Cerbos' own format, so
+`cerbos compile` runs it unchanged once a binary is available. This module
+runs the very same files against the PDP at 10.17.1.201:3592 — the files
+are the single source of truth, not copies of them.
+
+Every suite runs, not just the first one. A suite that is discovered but
+never executed is worse than no suite at all: the coverage it claims to
+provide evaporates silently, and the policy it describes has nothing
+checking it.
+
+Each suite runs against the fixtures of its own policy family. The families
+keep separate `testdata/` directories precisely so that this can be said
+without a second thought.
 """
 
 from __future__ import annotations
@@ -14,43 +23,66 @@ from cerbos_policy_tests.config import POLICY_DIR
 from cerbos_policy_tests.fixtures import load_fixtures
 from cerbos_policy_tests.nativesuite import find_suites, load_suite
 from cerbos_policy_tests.pep import authorize
-from cerbos_policy_tests.rules import EFFECT_ALLOW, effect as reference_effect
+from cerbos_policy_tests.reference import EFFECT_ALLOW, EFFECT_DENY, effect
 
-EFFECT_DENY = "EFFECT_DENY"
+SUITE_PATHS = find_suites(POLICY_DIR)
+SUITES = [(path, load_suite(path)) for path in SUITE_PATHS]
+FIXTURES = {path.parent: load_fixtures(path.parent) for path in SUITE_PATHS}
 
-SUITE_PATH = find_suites(POLICY_DIR)[0]
-SUITE = load_suite(SUITE_PATH)
-FIXTURES = load_fixtures(POLICY_DIR)
-
-
-def _case_id(case) -> str:
-    return f"{case.principal}-{case.resource}-{case.action}"
-
-
-def test_suite_is_loaded():
-    assert SUITE.cases, "the native suite expanded to no assertions"
-    assert SUITE.name == "BasicResourceTest"
-    assert SUITE_PATH.name == "basicResource_test.yaml"
+CASES = [
+    (path, suite, case)
+    for path, suite in SUITES
+    for case in suite.cases
+]
 
 
-def test_suite_declares_strict_evaluation():
+def _case_id(path, suite, case) -> str:
+    return f"{suite.kind}-{case.principal}-{case.resource}-{case.action}"
+
+
+def test_every_suite_is_executed():
+    """A suite that no test runs is a coverage claim with nothing behind it."""
+    assert SUITE_PATHS, f"no *_test.yaml suite found under {POLICY_DIR}"
+    assert len(CASES) == sum(len(suite.cases) for _, suite in SUITES)
+
+
+@pytest.mark.parametrize(
+    ("path", "suite"),
+    SUITES,
+    ids=[f"{suite.kind}-{path.name}" for path, suite in SUITES],
+)
+def test_suite_is_loaded(path, suite):
+    assert suite.cases, f"{path.name} expanded to no assertions"
+    assert suite.name, f"{path.name} declares no suite name"
+
+
+@pytest.mark.parametrize(
+    ("path", "suite"),
+    SUITES,
+    ids=[f"{suite.kind}-{path.name}" for path, suite in SUITES],
+)
+def test_suite_declares_strict_evaluation(path, suite):
     """The suite states the strict-evaluation intent.
 
     The live PDP evaluates without it, so a live run cannot catch a
     condition that errors at runtime and silently evaluates false. The
     declaration is what `cerbos compile --strict-evaluation` will enforce.
     """
-    assert SUITE.options.get("strictEvaluation") is True
+    assert suite.options.get("strictEvaluation") is True, (
+        f"{path.name} does not declare strictEvaluation"
+    )
 
 
 @pytest.mark.parametrize(
-    "case",
-    [pytest.param(case, id=_case_id(case)) for case in SUITE.cases],
+    ("path", "suite", "case"),
+    [pytest.param(path, suite, case, id=_case_id(path, suite, case))
+     for path, suite, case in CASES],
 )
-def test_native_suite_assertion(client, case):
-    """One assertion of the native suite, checked against the live PDP."""
-    principal = FIXTURES.principal(case.principal)
-    resource = FIXTURES.resource(case.resource)
+def test_native_suite_assertion(client, path, suite, case):
+    """One assertion of a native suite, checked against the live PDP."""
+    fixtures = FIXTURES[path.parent]
+    principal = fixtures.principal(case.principal)
+    resource = fixtures.resource(case.resource)
 
     allowed = authorize(
         client,
@@ -68,24 +100,30 @@ def test_native_suite_assertion(client, case):
 
 
 @pytest.mark.parametrize(
-    "case",
-    [pytest.param(case, id=_case_id(case)) for case in SUITE.cases],
+    ("path", "suite", "case"),
+    [pytest.param(path, suite, case, id=_case_id(path, suite, case))
+     for path, suite, case in CASES],
 )
-def test_native_suite_agrees_with_the_reference_model(case):
+def test_native_suite_agrees_with_the_reference_model(path, suite, case):
     """The hand-written spec and the reference model must not drift apart.
 
     The suite holds the authoritative expectations; the model is the oracle
     the exhaustive sweep uses. If they disagree, one of them is wrong and
     the disagreement is here rather than inside a policy change.
     """
-    principal = FIXTURES.principal(case.principal)
-    resource = FIXTURES.resource(case.resource)
+    fixtures = FIXTURES[path.parent]
+    principal = fixtures.principal(case.principal)
+    resource = fixtures.resource(case.resource)
 
-    predicted = reference_effect(
-        principal.id,
-        set(principal.roles),
-        resource.attr,
-        case.action,
+    predicted = effect(
+        suite.kind,
+        principal_id=principal.id,
+        roles=principal.roles,
+        resource_id=resource.id,
+        resource_attr=resource.attr,
+        resource_scope=resource.scope,
+        resource_kind=resource.kind,
+        action=case.action,
     )
     assert predicted == case.effect, (
         f"{case.test}: the reference model says {predicted} but the suite says "

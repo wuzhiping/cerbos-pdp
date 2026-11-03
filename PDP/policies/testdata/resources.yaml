@@ -1,0 +1,99 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestFixture/Resources.schema.json
+#
+# Resource fixtures for the FDEP families.
+#
+# There is no scope. The provider is the kind —
+# `namespace:task_queue:workflow` — the app family inside it is the id (the
+# C4 path), and `attr` carries the two control fields the policy's
+# conditions read:
+#
+#   accessMode  read | execute   <- derived from the FDEP `do` flag
+#   riskLevel   low | medium | high   <- from the app registry
+#
+# The fixtures vary one field at a time, so a denial can be attributed to
+# the field that changed rather than to the shape of the request.
+
+resources:
+  # The control: read only, low risk, under the jev provider.
+  systemone_read_low:
+    kind: "pip.JEV.LAYA"
+    id: "systemone.LAYA"
+    attr:
+      accessMode: "read"
+      riskLevel: "low"
+
+  # Differs from the control only in `riskLevel`.
+  systemone_read_medium:
+    kind: "pip.JEV.LAYA"
+    id: "systemone.LAYA"
+    attr:
+      accessMode: "read"
+      riskLevel: "medium"
+
+  # Differs from the control only in `accessMode`.
+  systemone_execute_low:
+    kind: "pip.JEV.LAYA"
+    id: "systemone.LAYA"
+    attr:
+      accessMode: "execute"
+      riskLevel: "low"
+
+  # Differs from `systemone_execute_low` only in `riskLevel`.
+  systemone_execute_high:
+    kind: "pip.JEV.LAYA"
+    id: "systemone.LAYA"
+    attr:
+      accessMode: "execute"
+      riskLevel: "high"
+
+  # A family this provider does not serve. The id is what tells the
+  # families apart, so a request for another family finds no rule.
+  systemone_read_other_family:
+    kind: "pip.JEV.LAYA"
+    id: "other.LAYA"
+    attr:
+      accessMode: "read"
+      riskLevel: "low"
+
+  # A provider with no policy at all. The store holds nothing for it, so
+  # the request is NO_MATCH and everything is denied.
+  systemone_read_unknown_kind:
+    kind: "pip.nosuch.org"
+    id: "systemone.LAYA"
+    attr:
+      accessMode: "read"
+      riskLevel: "low"
+
+  # `accessMode` outside the schema's enum. The schema rejects the
+  # request, so every action of it is denied and the response carries
+  # validation errors.
+  systemone_bad_access_mode:
+    kind: "pip.JEV.LAYA"
+    id: "systemone.LAYA"
+    attr:
+      accessMode: "bogus"
+      riskLevel: "low"
+
+  # `accessMode` outside the schema's enum, under the fdep provider.
+  twsemops_bad_access_mode:
+    kind: "pip.FDEP.SOP"
+    id: "twseMops"
+    attr:
+      accessMode: "bogus"
+      riskLevel: "medium"
+
+  # The other provider's family.
+  twsemops_read:
+    kind: "pip.FDEP.SOP"
+    id: "twseMops"
+    attr:
+      accessMode: "read"
+      riskLevel: "medium"
+
+  # Differs from `twsemops_read` only in `accessMode`.
+  twsemops_execute:
+    kind: "pip.FDEP.SOP"
+    id: "twseMops"
+    attr:
+      accessMode: "execute"
+      riskLevel: "medium"

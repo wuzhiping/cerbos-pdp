@@ -1,0 +1,43 @@
+# The rules that are the same for every app family and every provider.
+#
+# They live here — once — and the generator stamps them into the unscoped
+# base policy of each app family. The chain reaches the base when a
+# family's own policy has no opinion, so these are what an administrator
+# gets on every app.
+#
+# The `actions: ["*"]` wildcard covers every operation — the plugin files.
+#
+# Note what is NOT here: the guest rule. That belongs to the app family
+# that grants it, so it lives in `pdp-config/orgs.yaml` under that family.
+
+rules:
+  # Purpose: a platform administrator may call any app of any provider.
+  - name: admin-may-call-anything
+    actions:
+      - "*"
+    roles:
+      - FDEP_ADMIN
+    effect: EFFECT_ALLOW
+
+  # Purpose: a developer may run a business flow, but not one the app
+  # registry marks as high risk.
+  - name: developer-may-execute-non-high-risk
+    actions:
+      - "*"
+    roles:
+      - FDEP_DEVELOPER
+    effect: EFFECT_ALLOW
+    condition:
+      match:
+        expr: R.attr.accessMode == "execute" && R.attr.riskLevel != "high"
+
+  # Purpose: an auditor may look at low-risk apps and nothing else.
+  - name: auditor-may-only-read-low-risk
+    actions:
+      - "*"
+    roles:
+      - FDEP_AUDITOR
+    effect: EFFECT_ALLOW
+    condition:
+      match:
+        expr: R.attr.accessMode == "read" && R.attr.riskLevel == "low"

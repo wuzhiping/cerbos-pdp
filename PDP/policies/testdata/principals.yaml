@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestFixture/Principals.schema.json
+#
+# Principal fixtures for the FDEP families.
+#
+# The keys are labels. What matters for coverage isolation is the
+# *content*: several fixtures deliberately share an `id` and differ only in
+# `roles`, so that a denial can be attributed to the missing role rather
+# than to a different person.
+#
+# `attr` carries what FDEP puts on the principal — the caller's IP, email
+# and request time. It is there for the record, not for the decision:
+# the policy declares no principal schema, and no condition reads these
+# fields, so a caller cannot influence the outcome through them.
+
+principals:
+  # A platform administrator. Unrestricted.
+  fdep_admin:
+    id: "fdep-admin"
+    roles:
+      - "FDEP_ADMIN"
+    attr:
+      clientIp: "10.17.1.94"
+      email: "admin@feg.cn"
+      requestTime: "2026-11-02T08:00:00Z"
+
+  # Same id as `fdep_admin`, without the FDEP_ADMIN role. Isolates the
+  # FDEP_ADMIN prerequisite: no other field differs from the control.
+  fdep_admin_without_admin_role:
+    id: "fdep-admin"
+    roles:
+      - "FDEP_DEVELOPER"
+
+  # A developer: may run business flows, but not high-risk ones.
+  fdep_developer:
+    id: "fdep-developer"
+    roles:
+      - "FDEP_DEVELOPER"
+    attr:
+      clientIp: "10.17.1.94"
+      email: "developer@feg.cn"
+      requestTime: "2026-11-02T08:00:00Z"
+
+  # An auditor: may read low-risk apps, may run nothing.
+  fdep_auditor:
+    id: "fdep-auditor"
+    roles:
+      - "FDEP_AUDITOR"
+    attr:
+      clientIp: "10.17.1.94"
+      email: "auditor@feg.cn"
+      requestTime: "2026-11-02T08:00:00Z"
+
+  # A real caller: FDEP's own token carries the role `USERS`, and the
+  # family grants are judged by it.
+  fdep_user:
+    id: "U1017194"
+    roles:
+      - "USERS"
+    attr:
+      clientIp: "10.17.1.94"
+      email: "aife@feg.cn"
+      requestTime: "2026-11-02T22:59:39.863Z"
+
+  # An unauthenticated caller. The id is the platform's own — the policy
+  # grants by the principal's id, so it has to be the real one.
+  fdep_guest:
+    id: "guests"
+    roles:
+      - "FDEP_GUEST"
+
+  # Same id as `fdep_guest`, holding two roles. Cerbos takes the union of
+  # what the roles grant, so the administrator grant applies on top of the
+  # guest grant.
+  fdep_guest_with_admin_role:
+    id: "guests"
+    roles:
+      - "FDEP_GUEST"
+      - "FDEP_ADMIN"

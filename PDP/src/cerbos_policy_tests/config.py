@@ -26,8 +26,24 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 #: The policy source of truth: schemas, resource policies, native test suites.
 POLICY_DIR = REPO_ROOT / "policies"
 
+#: Each policy family lives in a directory of its own and owns the
+#: `testdata/` inside it. Keeping them apart is not tidiness: a suite that
+#: runs against another family's fixtures still passes — with the wrong
+#: answers — so the fixtures have to be reachable only through the family
+#: that owns them.
+BASIC_RESOURCE_POLICY_DIR = POLICY_DIR / "resource_policies"
+
 #: The coverage plan, kept outside the policy directory so it never reaches a store.
 COVERAGE_PLAN = REPO_ROOT / "coverage-plan.json"
+
+#: The org registry: the providers FDEP serves, the app families, and the
+#: rules of each. The scoped policies are generated from it, and the
+#: reference model derives its expectations from it — so the model and the
+#: store cannot drift apart silently.
+ORGS_REGISTRY = REPO_ROOT / "pdp-config" / "orgs.yaml"
+
+#: The rules that are the same for every app family and every provider.
+GENERAL_RULES = REPO_ROOT / "pdp-config" / "general-rules.yaml"
 
 
 def bypass_proxy(host: str | None = None) -> None:

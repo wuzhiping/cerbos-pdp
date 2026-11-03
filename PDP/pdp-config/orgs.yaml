@@ -1,0 +1,132 @@
+# The orgs FDEP serves, the app families each of them serves, and the
+# rules of each.
+#
+# ── The attributes are switched off ─────────────────────────────────────────
+#
+# `attributes: false` means **no rule reads `R.attr`, and the resource
+# schema is not declared either** — the attributes have no effect at all
+# for now.
+#
+# The reason is the app registry: `riskLevel` is supposed to come from
+# FDEP's own registry, and it is not wired up yet. A rule that reads an
+# attribute nobody can supply is worse than no rule.
+#
+# ⚠️ **A rule that reads an attribute is switched off *entirely*, not just
+# stripped of its condition.** The condition is what made the rule narrow:
+# `guests-may-read` grants the guest `R.id == "systemone.LAYA"` **and**
+# `R.attr.accessMode == "read"` — drop the second half and the guest may
+# run the business flow. So the whole rule goes, and the answer is a
+# refusal (the default denial), not a wider grant.
+#
+# The rules themselves stay in `general-rules.yaml` and in the families
+# below, with their conditions intact — flipping this to `true` brings
+# them all back.
+attributes: false
+#
+# ── The shape of one FDEP call ───────────────────────────────────────────────
+# An app id is `@<org-key>.<c4-path>.<operation>`:
+#
+#     @jev.systemone.LAYA.Choice
+#      │    │            │        └──► action = Choice.py   the plugin file
+#      │    │            └───────────► C4 path = systemone.LAYA
+#      │    └────────────────────────► org    = jev
+#      └─────────────────────────────► the org's key in FDEP's org map
+#
+#     @fdep.twseMops.todayMaterial
+#      │     │              └──► action = todayMaterial.py
+#      │     └─────────────────► C4 path = twseMops
+#      └──────────────────────► org = fdep
+#
+# **The last segment is the operation; everything before it is the C4 path.**
+# The C4 path is a folder path, so it may have several segments —
+# `systemone.LAYA` is the folder `systemone/LAYA`.
+#
+# ── The Cerbos resource ─────────────────────────────────────────────────────
+# There is **no scope** any more. The provider goes into the kind instead:
+#
+#     kind   = namespace.task_queue.workflow      pip.JEV.LAYA
+#     id     = the C4 path                       systemone.LAYA
+#     action = the plugin file                   Choice.py
+#     attr   = { accessMode, riskLevel }
+#
+# The kind names the provider, the id names the app family inside it, and the
+# action names the operation. So **one policy per provider** — no chain, no
+# levels to keep complete, and nothing to fall out of sync.
+#
+# The app family is separated by the id, exactly: a rule about one family
+# carries `R.id == "systemone.LAYA"`, and the generator adds that itself.
+#
+# ⚠️ **The kind has to match FDEP's own org configuration exactly.** It is
+# built from the org's `namespace`, `task_queue` and `workflow`.
+
+# ── The providers ───────────────────────────────────────────────────────────
+orgs:
+  - name: jev
+    # The Cerbos kind of this provider: namespace.task_queue.workflow.
+    #
+    # **Dotted, not colon-separated.** A colon-separated kind is rewritten by
+    # the store — `pip:JEV:LAYA` is kept as `resource.pip_JEV_LAYA.vdefault` —
+    # so the kind and its id would disagree. With dots the store keeps the
+    # name, and the file name, the policy, the request and the store id are
+    # all the same string.
+    kind: pip.JEV.LAYA
+    # The app families this provider serves.
+    apps:
+      - path: systemone.LAYA
+        riskLevel: low
+        # The operations this family has. The plugin file of an operation
+        # is `<operation>.py`.
+        actions:
+          - Choice
+          - Noul
+          - Score
+        # This family's own rules.
+        #
+        # Purpose: an unauthenticated caller may look at the files of this
+        # family, and may not do anything else. The generator adds
+        # `R.id == "systemone.LAYA"` to the condition — the id is what
+        # separates the families.
+        #
+        # **A grant is three things: who, which app, which operation.**
+        #
+        #   principal  the principal's id (`_token_.user_id`) — optional;
+        #              without it the grant is open to every caller
+        #   app        the family — the generator turns it into `R.id`
+        #   actions    the operations — and the action *is* the operation
+        #
+        # The roles are ignored (`roles: ["*"]`): the identity is the
+        # principal's id. That matters today — the platform sends
+        # `roles: ["guests"]` while the role names in the policies were
+        # `FDEP_GUEST`, so a role-based rule matched nothing and every
+        # call was refused.
+        grants:
+          - name: guests-may-use-systemone
+            actions:
+              - Choice
+              - Noul
+              - Score
+            effect: EFFECT_ALLOW
+
+  - name: fdep
+    kind: pip.FDEP.SOP
+    apps:
+      - path: twseMops
+        # ⚠️ Placeholder — the real risk level has to come from FDEP's app
+        # registry. It decides whether a developer may execute this family.
+        riskLevel: medium
+        actions:
+          - todayMaterial
+          - materialDetail
+        # The people who may call this family.
+        #
+        # The role is the one FDEP's own token carries: `_token_.roles` is
+        # `["USERS"]`. The rule is role-based, so the general rules (which
+        # are role-based too) and this one are judged the same way.
+        grants:
+          - name: users-may-use-twseMops
+            roles:
+              - USERS
+            actions:
+              - todayMaterial
+              - materialDetail
+            effect: EFFECT_ALLOW

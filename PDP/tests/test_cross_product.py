@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import pytest
 
-from cerbos_policy_tests.config import POLICY_DIR
+from cerbos_policy_tests.config import BASIC_RESOURCE_POLICY_DIR
 from cerbos_policy_tests.fixtures import load_fixtures
 from cerbos_policy_tests.pep import authorize
 from cerbos_policy_tests.rules import EFFECT_ALLOW, effect as reference_effect
 
-FIXTURES = load_fixtures(POLICY_DIR)
+FIXTURES = load_fixtures(BASIC_RESOURCE_POLICY_DIR)
 
 ACTIONS = ("read", "create", "update", "delete")
 

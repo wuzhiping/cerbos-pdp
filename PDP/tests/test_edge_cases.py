@@ -10,13 +10,13 @@ import httpx
 import pytest
 
 from cerbos_policy_tests.client import build_client
-from cerbos_policy_tests.config import POLICY_DIR
+from cerbos_policy_tests.config import BASIC_RESOURCE_POLICY_DIR
 from cerbos_policy_tests.fixtures import load_fixtures
 from cerbos_policy_tests.pep import PdpError, PdpUnavailable, authorize
 
 from cerbos.sdk.model import Principal, Resource
 
-FIXTURES = load_fixtures(POLICY_DIR)
+FIXTURES = load_fixtures(BASIC_RESOURCE_POLICY_DIR)
 RESOURCE_KIND = "basicResource"
 
 

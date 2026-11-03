@@ -1166,6 +1166,11 @@ resourcePolicy:
 
 ### 实测补充(2026-10-30,对着线上 PDP 0.57.0)
 
+> **本节是当时的测量记录,scope 用的是当时的占位值 `jev`。**
+> 现在的真值是 `pip.JEV.LAYA`,链是 `pip` → `pip.JEV` → `pip.JEV.LAYA`。
+> 更完整的实测结果(链的完整性、批量推送的原子性、删除时的 `breaksScopeChain`)
+> 在 `PLAN.md` §3.4 和 §3.7。
+
 官方文档说「从最具体的 scoped policy 开始,沿 scope 层级往上走」。**实测下来,
 这条链的行为比文档描述的更严格**,有三条必须知道:
 

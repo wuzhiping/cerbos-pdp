@@ -794,28 +794,36 @@ scope = a.b.c  →  查 a.b.c → a.b → a → 无 scope
 ### 9.8 加上 scope 之后:多了一层查找
 
 前八节是**没有 scope** 的情况。加上 scope 之后,策略查找变成一条链,
-而这条链的行为**比直觉严格**。实测(基础 policy + `scope: jev` 的 policy):
+而这条链的行为**比直觉严格**。实测(基础 policy + 一条 scope 链
+`pip` → `pip.JEV` → `pip.JEV.LAYA`):
 
 ```
-请求带 scope=jev
+请求带 scope=pip.JEV.LAYA
    ↓
-查 resource.fdepApi.vdefault/jev     ← 有就用它
+查 resource.fdepApi.vdefault/pip.JEV.LAYA   ← 有就用它
    ↓ 没有
-查 resource.fdepApi.vdefault          ← 基础 policy
+查 resource.fdepApi.vdefault/pip.JEV       ← 链的上一层
+   ↓ 没有
+查 resource.fdepApi.vdefault/pip
+   ↓ 没有
+查 resource.fdepApi.vdefault                ← 基础 policy
    ↓
 ```
 
-| 请求 | 结果 | matchedPolicy |
-|---|---|---|
-| scope=`jev`(有这份 policy) | 按 jev 的规则判 | `resource.fdepApi.vdefault/jev` |
-| scope=`other`(**没有**这份 policy) | **NO_MATCH** | **`NO_MATCH`** |
-| scope=`jev.child`(jev 有,jev.child 没有) | **NO_MATCH** | **`NO_MATCH`** |
-| scope=`jev`,某角色(基础 ALLOW / scoped DENY) | **DENY** | `.../jev` |
+**而且每一层都必须有。** 少了中间任何一层,就是 `NO_MATCH` ——
+不是「往上找一层」,是「链断了」。
+
+| 请求 | store 里有什么 | 结果 | matchedPolicy |
+|---|---|---|---|
+| scope=`pip.JEV.LAYA`(三层齐全) | 整条链 | 按 LAYA 的规则判 | `resource.fdepApi.vdefault/pip.JEV.LAYA` |
+| scope=`pip.JEV`(有)但 `pip` 没有 | 缺中间层 | **NO_MATCH** | **`NO_MATCH`** |
+| scope=`nosuchscope`(整条链都没有) | 只有基础 | **NO_MATCH** | **`NO_MATCH`** |
+| scope=`pip.JEV.LAYA`,某角色(基础 ALLOW / scoped DENY) | 整条链 | **DENY** | `.../pip.JEV.LAYA` |
 
 **两个要点:**
 
-**① 请求的 scope 必须有对应的 policy。** 基础 policy **不是兜底** ——
-`scope=other` 时基础那份根本没被咨询。这和「往上走找」的直觉相反。
+**① 请求的 scope 必须有对应的 policy,链还得完整。** 基础 policy **不是兜底** ——
+`scope=nosuchscope` 时基础那份根本没被咨询。这和「往上走找」的直觉相反。
 
 **② scope 存在时,更具体的赢。** 同一个角色在基础里 ALLOW、在 scoped 里 DENY → DENY。
 

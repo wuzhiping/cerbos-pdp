@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "description": "The attributes every FDEP app resource carries, whichever app family it is.",
+  "properties": {
+    "accessMode": {
+      "type": "string",
+      "enum": ["read", "execute"],
+      "description": "What the call does with the app: 'read' fetches a file, 'execute' runs the business flow. Derived from the FDEP `do` flag, which the BPM layer inverts once, so `share.do == False` means 'execute'."
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "The risk the app carries, taken from the FDEP app registry rather than from the caller."
+    }
+  },
+  "required": ["accessMode", "riskLevel"],
+  "additionalProperties": false
+}

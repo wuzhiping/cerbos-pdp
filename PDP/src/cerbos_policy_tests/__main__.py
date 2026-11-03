@@ -15,7 +15,12 @@ import sys
 from pathlib import Path
 
 from cerbos_policy_tests.client import build_client
-from cerbos_policy_tests.config import COVERAGE_PLAN, POLICY_DIR, REPO_ROOT
+from cerbos_policy_tests.config import (
+    BASIC_RESOURCE_POLICY_DIR,
+    COVERAGE_PLAN,
+    POLICY_DIR,
+    REPO_ROOT,
+)
 from cerbos_policy_tests.coverage import audit_live
 from cerbos_policy_tests.fixtures import load_fixtures
 from cerbos_policy_tests.testplan import load_plan
@@ -37,7 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     plan = load_plan(COVERAGE_PLAN)
-    fixtures = load_fixtures(POLICY_DIR)
+    # The coverage plan describes basicResource, so the audit runs against
+    # that family's fixtures.
+    fixtures = load_fixtures(BASIC_RESOURCE_POLICY_DIR)
 
     with build_client() as client:
         result = audit_live(plan, fixtures, client, POLICY_DIR)

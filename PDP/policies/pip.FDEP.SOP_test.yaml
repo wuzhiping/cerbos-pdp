@@ -1,0 +1,168 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestSuite.schema.json
+#
+# Native Cerbos test suite for the fdep provider.
+#
+# ── The decision is three things ────────────────────────────────────────────
+# **who** · **which app** (the resource's id, the C4 path) · **which
+# operation** (the action).
+#
+# ── The attributes are switched off ─────────────────────────────────────────
+# `pdp-config/orgs.yaml` has `attributes: false`, so **no rule reads
+# `R.attr`** and the resource schema is not declared either. The rules that
+# needed the attributes are switched off **entirely**, so for now the
+# administrator's rule and this family's own grant are what is live.
+
+name: "PipFdepSopTest"
+description: "Who may call the twseMops apps under the fdep provider."
+
+options:
+  strictEvaluation: true
+
+tests:
+  - name: "Administrator may call any operation"
+    description: "The admin rule carries no condition and the wildcard action."
+    input:
+      principals:
+        - fdep_admin
+      resources:
+        - twsemops_read
+        - twsemops_execute
+      actions:
+        - todayMaterial
+        - materialDetail
+    expected:
+      - principal: fdep_admin
+        resource: twsemops_read
+        actions:
+          todayMaterial: EFFECT_ALLOW
+          materialDetail: EFFECT_ALLOW
+      - principal: fdep_admin
+        resource: twsemops_execute
+        actions:
+          todayMaterial: EFFECT_ALLOW
+          materialDetail: EFFECT_ALLOW
+
+  - name: "A caller with the USERS role may call this family's operations"
+    description: >
+      The grant is role-based, and the role is the one FDEP's own token
+      carries: `_token_.roles` is `["USERS"]`. The app and the operations
+      are named one by one, so nothing outside them is granted.
+    input:
+      principals:
+        - fdep_user
+      resources:
+        - twsemops_read
+        - twsemops_execute
+      actions:
+        - todayMaterial
+        - materialDetail
+    expected:
+      - principal: fdep_user
+        resource: twsemops_read
+        actions:
+          todayMaterial: EFFECT_ALLOW
+          materialDetail: EFFECT_ALLOW
+      - principal: fdep_user
+        resource: twsemops_execute
+        actions:
+          todayMaterial: EFFECT_ALLOW
+          materialDetail: EFFECT_ALLOW
+
+  - name: "A caller with no matching role is refused"
+    description: >
+      The developer's and the auditor's rules read `R.attr`, so they are
+      switched off; and the guest has no role this family grants.
+    input:
+      principals:
+        - fdep_developer
+        - fdep_auditor
+        - fdep_guest
+      resources:
+        - twsemops_read
+        - twsemops_execute
+      actions:
+        - todayMaterial
+    expected:
+      - principal: fdep_developer
+        resource: twsemops_read
+        actions:
+          todayMaterial: EFFECT_DENY
+      - principal: fdep_developer
+        resource: twsemops_execute
+        actions:
+          todayMaterial: EFFECT_DENY
+      - principal: fdep_auditor
+        resource: twsemops_read
+        actions:
+          todayMaterial: EFFECT_DENY
+      - principal: fdep_auditor
+        resource: twsemops_execute
+        actions:
+          todayMaterial: EFFECT_DENY
+      - principal: fdep_guest
+        resource: twsemops_read
+        actions:
+          todayMaterial: EFFECT_DENY
+      - principal: fdep_guest
+        resource: twsemops_execute
+        actions:
+          todayMaterial: EFFECT_DENY
+
+  - name: "A caller with the USERS role may not call an operation the grant does not name"
+    description: >
+      The grant names the operations one by one, so an operation that is
+      not in it is not granted.
+    input:
+      principals:
+        - fdep_user
+      resources:
+        - twsemops_read
+      actions:
+        - Other.py
+    expected:
+      - principal: fdep_user
+        resource: twsemops_read
+        actions:
+          Other.py: EFFECT_DENY
+
+  - name: "A provider with no policy is denied for everyone"
+    description: "The store holds nothing for this kind, so NO_MATCH."
+    input:
+      principals:
+        - fdep_admin
+        - fdep_user
+      resources:
+        - systemone_read_unknown_kind
+      actions:
+        - todayMaterial
+    expected:
+      - principal: fdep_admin
+        resource: systemone_read_unknown_kind
+        actions:
+          todayMaterial: EFFECT_DENY
+      - principal: fdep_user
+        resource: systemone_read_unknown_kind
+        actions:
+          todayMaterial: EFFECT_DENY
+
+  - name: "An attribute nobody reads changes nothing"
+    description: >
+      The schema is not declared while the attributes are switched off, so
+      an `accessMode` outside the enum is not even rejected.
+    input:
+      principals:
+        - fdep_admin
+        - fdep_user
+      resources:
+        - twsemops_bad_access_mode
+      actions:
+        - todayMaterial
+    expected:
+      - principal: fdep_admin
+        resource: twsemops_bad_access_mode
+        actions:
+          todayMaterial: EFFECT_ALLOW
+      - principal: fdep_user
+        resource: twsemops_bad_access_mode
+        actions:
+          todayMaterial: EFFECT_ALLOW

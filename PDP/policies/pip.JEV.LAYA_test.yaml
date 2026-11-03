@@ -1,0 +1,248 @@
+# yaml-language-server: $schema=https://api.cerbos.dev/latest/cerbos/policy/v1/TestSuite.schema.json
+#
+# Native Cerbos test suite for the jev provider.
+#
+# This file is the single source of truth for what the policy should do. It
+# is written in Cerbos' own `*_test.yaml` format so that `cerbos compile`
+# runs it unchanged once a cerbos binary is available, and the Python
+# harness in this repository executes the very same file against the running
+# PDP — see tests/test_native_suite.py.
+#
+# Two rules shape how the cases below are written:
+#
+#   1. `input` is a cross product. Every principal listed is checked against
+#      every resource listed, for every action listed. A pair that is absent
+#      from `expected` is expected to be DENY for every action, and so is any
+#      action of a listed pair that `expected` does not mention. Only
+#      requests that share an expectation may therefore be grouped.
+#
+#   2. Each case isolates one rule, so that a failure names the rule that
+#      broke rather than a cross product of them.
+#
+# ── The decision is three things ────────────────────────────────────────────
+# **who** (the principal's id) · **which app** (the resource's id, the C4
+# path) · **which operation** (the action, the plugin file). The roles are
+# ignored by the app grants (`roles: ["*"]`), because the identity is the
+# principal's id.
+#
+# ── The attributes are switched off ─────────────────────────────────────────
+# `pdp-config/orgs.yaml` has `attributes: false`, so **no rule reads
+# `R.attr`** and the resource schema is not declared either. The rules that
+# needed the attributes — the developer's and the auditor's — are switched
+# off **entirely**, not stripped of their conditions: the condition is what
+# made them narrow, and dropping only the condition would widen the grant.
+#
+# So the developer's and the auditor's calls are refused for now, and the
+# administrator's and the guest's go through.
+
+name: "PipJevLayaTest"
+description: "Who may call the systemone.LAYA apps under the jev provider."
+
+options:
+  strictEvaluation: true
+
+tests:
+  # ── FDEP_ADMIN ────────────────────────────────────────────────────────────
+  - name: "Administrator may call any operation of any app"
+    description: >
+      The admin rule carries no condition and the wildcard action, so it
+      grants every app, every operation and every risk level.
+    input:
+      principals:
+        - fdep_admin
+      resources:
+        - systemone_read_low
+        - systemone_execute_high
+      actions:
+        - Choice
+        - Noul
+        - Score
+    expected:
+      - principal: fdep_admin
+        resource: systemone_read_low
+        actions:
+          Choice: EFFECT_ALLOW
+          Noul: EFFECT_ALLOW
+          Score: EFFECT_ALLOW
+      - principal: fdep_admin
+        resource: systemone_execute_high
+        actions:
+          Choice: EFFECT_ALLOW
+          Noul: EFFECT_ALLOW
+          Score: EFFECT_ALLOW
+
+  # ── The guest's grant ─────────────────────────────────────────────────────
+  - name: "The guest may call the systemone.LAYA operations"
+    description: >
+      The grant names three things: the principal's id (`guests`), the
+      family (`systemone.LAYA`) and the operations. All three have to
+      match.
+    input:
+      principals:
+        - fdep_guest
+      resources:
+        - systemone_read_low
+      actions:
+        - Choice
+        - Noul
+        - Score
+    expected:
+      - principal: fdep_guest
+        resource: systemone_read_low
+        actions:
+          Choice: EFFECT_ALLOW
+          Noul: EFFECT_ALLOW
+          Score: EFFECT_ALLOW
+
+  - name: "The guest may not call an operation the grant does not name"
+    description: >
+      The grant names the operations one by one, so an operation that is
+      not in it is not granted. `Other` is not a plugin of this family
+      — the point is that the grant is a list, not a wildcard.
+    input:
+      principals:
+        - fdep_guest
+      resources:
+        - systemone_read_low
+      actions:
+        - Other
+    expected:
+      - principal: fdep_guest
+        resource: systemone_read_low
+        actions:
+          Other: EFFECT_DENY
+
+  - name: "The guest may not call a family the grant does not name"
+    description: >
+      The id is what tells the families apart: the grant is for
+      `systemone.LAYA`, and another family is not granted.
+    input:
+      principals:
+        - fdep_guest
+      resources:
+        - systemone_read_other_family
+      actions:
+        - Choice
+    expected:
+      - principal: fdep_guest
+        resource: systemone_read_other_family
+        actions:
+          Choice: EFFECT_DENY
+
+  # ── The rules that are switched off ───────────────────────────────────────
+  - name: "The family is open: whoever asks, the grant decides"
+    description: >
+      The grant names the family and the operations, and nobody else — the
+      roles are ignored (`roles: ["*"]`). So the developer's and the
+      auditor's calls are granted too: the grant does not narrow by role.
+      What it does narrow by is the family and the operation.
+    input:
+      principals:
+        - fdep_developer
+        - fdep_auditor
+      resources:
+        - systemone_read_low
+        - systemone_execute_low
+      actions:
+        - Choice
+    expected:
+      - principal: fdep_developer
+        resource: systemone_read_low
+        actions:
+          Choice: EFFECT_ALLOW
+      - principal: fdep_developer
+        resource: systemone_execute_low
+        actions:
+          Choice: EFFECT_ALLOW
+      - principal: fdep_auditor
+        resource: systemone_read_low
+        actions:
+          Choice: EFFECT_ALLOW
+      - principal: fdep_auditor
+        resource: systemone_execute_low
+        actions:
+          Choice: EFFECT_ALLOW
+
+  # ── The policy is filed under the kind ────────────────────────────────────
+  - name: "A provider with no policy is denied for everyone"
+    description: >
+      The store holds nothing for this kind, so the request is NO_MATCH and
+      everything is denied — including an administrator's.
+    input:
+      principals:
+        - fdep_admin
+        - fdep_guest
+      resources:
+        - systemone_read_unknown_kind
+      actions:
+        - Choice
+    expected:
+      - principal: fdep_admin
+        resource: systemone_read_unknown_kind
+        actions:
+          Choice: EFFECT_DENY
+      - principal: fdep_guest
+        resource: systemone_read_unknown_kind
+        actions:
+          Choice: EFFECT_DENY
+
+  # ── Roles combine ─────────────────────────────────────────────────────────
+  - name: "A guest who is also an administrator gets the administrator grant"
+    description: >
+      Cerbos takes the union of what the roles grant, and the
+      administrator's rule is role-based.
+    input:
+      principals:
+        - fdep_guest_with_admin_role
+      resources:
+        - systemone_execute_high
+      actions:
+        - Choice
+    expected:
+      - principal: fdep_guest_with_admin_role
+        resource: systemone_execute_high
+        actions:
+          Choice: EFFECT_ALLOW
+
+  # ── Isolating the role, not the person ────────────────────────────────────
+  - name: "Dropping the administrator role does not close the family"
+    description: >
+      Same principal id as the administrator control, so only the role set
+      differs. The administrator's rule needs `FDEP_ADMIN` — but the
+      family's own grant is open, so the call is still granted.
+    input:
+      principals:
+        - fdep_admin_without_admin_role
+      resources:
+        - systemone_execute_high
+      actions:
+        - Choice
+    expected:
+      - principal: fdep_admin_without_admin_role
+        resource: systemone_execute_high
+        actions:
+          Choice: EFFECT_ALLOW
+
+  # ── The attributes have no effect at all ─────────────────────────────────
+  - name: "An attribute nobody reads changes nothing"
+    description: >
+      The schema is not declared while the attributes are switched off, so
+      an `accessMode` outside the enum is not even rejected — it is simply
+      not looked at.
+    input:
+      principals:
+        - fdep_admin
+        - fdep_guest
+      resources:
+        - systemone_bad_access_mode
+      actions:
+        - Choice
+    expected:
+      - principal: fdep_admin
+        resource: systemone_bad_access_mode
+        actions:
+          Choice: EFFECT_ALLOW
+      - principal: fdep_guest
+        resource: systemone_bad_access_mode
+        actions:
+          Choice: EFFECT_ALLOW

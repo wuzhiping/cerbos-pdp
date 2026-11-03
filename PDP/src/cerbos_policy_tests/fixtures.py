@@ -84,24 +84,58 @@ class Fixtures:
             ) from None
 
 
+class AmbiguousTestdataError(FileNotFoundError):
+    """More than one `testdata/` directory answers for one policy directory.
+
+    Picking "the first one found" is what makes this worth an error: the
+    suite would keep running, against fixtures that belong to a different
+    policy family, and every answer it produced would be about the wrong
+    policy.
+    """
+
+    def __init__(self, policy_dir: Path, candidates: list[Path]) -> None:
+        found = ", ".join(str(candidate) for candidate in candidates)
+        super().__init__(
+            f"{policy_dir} owns more than one testdata/ directory: {found}. "
+            f"Point the caller at the policy directory that owns the one it "
+            f"means."
+        )
+        self.policy_dir = policy_dir
+        self.candidates = candidates
+
+
 def _load_yaml(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
         return yaml.safe_load(handle) or {}
 
 
-def _find_testdata(policy_dir: Path) -> Path | None:
-    """Locate the shared `testdata/` directory under a policy directory."""
-    for candidate in sorted(policy_dir.rglob("testdata")):
-        if candidate.is_dir():
-            return candidate
-    return None
+def _find_testdata(policy_dir: Path) -> Path:
+    """Locate the `testdata/` directory that belongs to `policy_dir`.
+
+    A policy directory owns the `testdata/` directory directly inside it.
+    The deeper search is a fallback for the single-family layout, and it
+    accepts only an unambiguous match.
+    """
+    direct = policy_dir / "testdata"
+    if direct.is_dir():
+        return direct
+
+    candidates = sorted(p for p in policy_dir.rglob("testdata") if p.is_dir())
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise FileNotFoundError(f"no testdata/ directory under {policy_dir}")
+    raise AmbiguousTestdataError(policy_dir, candidates)
 
 
 def load_fixtures(policy_dir: Path) -> Fixtures:
-    """Load the shared principal and resource fixtures under `policy_dir`."""
+    """Load the principal and resource fixtures of one policy family.
+
+    `policy_dir` is the directory that owns the fixtures — the one the
+    `*_test.yaml` suite and the policies live in — not the root of the
+    policy tree.
+    """
     testdata = _find_testdata(policy_dir)
-    if testdata is None:
-        raise FileNotFoundError(f"no testdata/ directory under {policy_dir}")
 
     principals: dict[str, PrincipalFixture] = {}
     resources: dict[str, ResourceFixture] = {}

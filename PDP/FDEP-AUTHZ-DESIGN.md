@@ -19,7 +19,7 @@ FDEP 是集中式调用入口:一个 endpoint,按 app id 派发到各 app 的业
 | # | 需求 | 落点 |
 |---|---|---|
 | 1 | 加用户验证,提供身份与角色 | `_token_.user_id` / `roles`(字段已存在,目前是 `guests` / `[]`) |
-| 2 | 以 app id 为 resource,提取控制栏位 + IP、时间等 | resource `fdepApi`;栏位来自 app 注册表 |
+| 2 | 以 app id 为 resource,提取控制栏位 + IP、时间等 | resource kind = provider 的 `namespace.task_queue.workflow`;栏位来自 app 注册表 |
 | 3 | 用 cerbos-sdk 对 PDP 上的策略做授权判断 | pipe.py 里,`runWF` 之前 |
 | 4 | 提供 audit log | PDP 决策日志 + FDEP 侧调用轨迹,靠 `cerbosCallId` 关联 |
 
@@ -100,7 +100,7 @@ _token_ = {
 
 先用 `FDEP_ADMIN` / `FDEP_DEVELOPER` / `FDEP_AUDITOR` / `FDEP_GUEST`。
 
-**与 4KI `rbac.md` 的 R1..R8 的对应关系待定** —— 那是身份层的决定,不在本次范围内。
+**与外部权限矩阵的 R1..R8 的对应关系待定** —— 那是身份层的决定,不在本次范围内。
 
 ---
 
@@ -108,13 +108,13 @@ _token_ = {
 
 ### 4.1 app id 的结构对应 Cerbos 的四个位置
 
-FDEP 的 app id 是 `@jev.systemone.Choice`。**三段各有归属:**
+FDEP 的 app id 是 `@jev.systemone.LAYA.Choice`。**两段各有归属,provider 进 kind:**
 
 | app id 段 | Cerbos | 理由 |
 |---|---|---|
-| `@jev` | **scope** | org 决定 `namespace.task_queue.workflow` —— 就是「哪个 Service Provider 实例在提供这个服务」。而 scope 在 Cerbos 里正是「同一个 kind+version 的不同实例」的定位方式 |
-| `systemone` | **resource.id** | 一族服务。**精确匹配** —— `R.id == "systemone"` 就是「systemone 这一族」,没有前缀陷阱 |
-| `Choice` | **action** | 具体的业务操作 |
+| `@jev` | **kind**(由服务端算) | org 决定 `namespace.task_queue.workflow` —— 就是「哪个 Service Provider 实例在提供这个服务」。<br>**`jev` 这个 org 的真值是 `{namespace:"pip", task_queue:"JEV", workflow:"LAYA"}`,所以 kind 是 `pip.JEV.LAYA`**<br>**kind 由服务端从 org 配置算出**,调用方改不了 —— 否则就能挑一个宽松的 provider 来给自己开路 |
+| `systemone.LAYA` | **resource.id** | 一族服务(C4 path)。**精确匹配** —— `R.id == "systemone.LAYA"` 就是「这一族」,没有前缀陷阱 |
+| `Choice` | **action** | 具体的业务操作。**action 是操作名,不是 py 文件名** —— py 文件(`Choice.py`)是插件的实现细节 |
 
 > `C4.` 前缀**不进 resource**。它是服务端转给 Temporal 时加的
 > (`"api": "C4." + api`),对授权没有意义 —— 授权看的是调用方要的那个 app。
@@ -123,30 +123,38 @@ FDEP 的 app id 是 `@jev.systemone.Choice`。**三段各有归属:**
 
 ```json
 {
-  "kind": "fdepApi",
-  "id": "systemone",
-  "scope": "jev",
-  "attr": {
-    "accessMode": "read",
-    "riskLevel": "low"
-  }
+  "kind": "pip.JEV.LAYA",
+  "id": "systemone.LAYA"
 }
 ```
 
+> 属性暂时整个关掉了 —— 见下面的说明。
+
 | 字段 | 来源 |
 |---|---|
-| `id` | app id 去掉 `@org.` 前缀和末段 |
-| `scope` | app id 的 org 段 |
-| `action` | app id 的末段 |
+| `kind` | 服务端从 org 的 `namespace.task_queue.workflow` 算出来 |
+| `id` | app id 去掉 `@org.` 前缀和末段(C4 path) |
+| `action` | app id 的末段 + `.py` |
 | `attr.accessMode` | FDEP 的 `do` 旗标 → `read`(查文件)/ `execute`(执行) |
 | `attr.riskLevel` | app 注册表 |
 
-**`attr` 从 4 个字段缩到 2 个。** 之前的 `app` 去了 id,`provider` 去了 scope,
+> ⚠️ **属性现在整个关掉了**(`pdp-config/orgs.yaml` 的 `attributes: false`):
+> 没有任何规则读 `R.attr`,resource 的 schema 也不声明。app 注册表还没接上,
+> `riskLevel` 拿不到 —— **读一个没人供得上的属性,比没有这条规则更糟。**
+> 依赖属性的规则整条退出(不是只删条件:条件正是让规则变窄的东西),
+> 所以现在只有 `FDEP_ADMIN` 能过。
+
+**没有 scope。** 曾经用 scope 表达 provider,代价是:scope 是层级,Cerbos 要求
+链上每一级都有 policy,三段路径要四份,而且 PDP 不让删有后代的层
+(`400 breaksScopeChain`)。改用 kind 之后,**一个 provider 一份 policy**,
+没有链,也就没有「链断着」这回事。
+
+**`attr` 从 4 个字段缩到 2 个。** 之前的 `app` 去了 id,`provider` 去了 kind,
 `operation` 去了 action —— 三个都不再是「附加信息」,而是 Cerbos 的一等位置。
 
 `app` 和 `provider` 不再需要重复放进 attr:
 - 「一族」判断靠 `R.id` 精确匹配
-- 「哪个 provider」由 scope 表达
+- 「哪个 provider」由 kind 表达
 
 ### 4.2 控制栏位从哪来
 
@@ -179,26 +187,31 @@ systemone.Choice:
 
 ## 5. PDP 侧的策略
 
-### 5.1 两份 policy:基础 + 每个 org 一份
+### 5.1 基础 policy + 每个 org 一条链
 
 ```
-policies/
-├── fdepApi.yaml            # 无 scope —— 与 org 无关的通用规则
-└── fdepApi.jev.yaml       # scope: jev —— 这个 provider 特有的规则
+policies/fdep_api/
+├── pip.JEV.LAYA.yaml           # kind: pip.JEV.LAYA —— 通用规则 + 各家族的规则
+└── pip.FDEP.SOP.yaml           # kind: pip.FDEP.SOP
 ```
 
-**基础 policy(无 scope)**放跨 org 通用的规则:
+> **不用 scope。** FDEP 的 scope 是
+> `namespace.task_queue.workflow`,但发给 PDP 的时候用**下划线连成一段** ——
+> 见 §5.4,点号会让 scope 变成层级,而 Cerbos 要求层级上的每一段都有 policy。
+> 于是**每个 provider 正好一份 policy**,加上一个共用的基础。
+
+**每个 org 一份 policy**,通用规则和该 provider 的规则都在里面:
 
 ```yaml
 apiVersion: api.cerbos.dev/v1
 
 resourcePolicy:
-  resource: fdepApi
+  resource: pip.JEV.LAYA
   version: default
 
   schemas:
     resourceSchema:
-      ref: cerbos:///fdepApi.json
+      ref: cerbos:///fdep.json
 
   rules:
     # 平台管理员:任何服务、任何操作
@@ -226,25 +239,18 @@ resourcePolicy:
           expr: R.attr.accessMode == "read" && R.attr.riskLevel == "low"
 ```
 
-**每个 org 一份 scoped policy** 放该 provider 特有的规则:
+**家族自己的规则也在同一份里**,靠 `R.id` 分开
+(这一段是生成器加的 —— 写规则的人只说「对这个家族成立什么」):
 
 ```yaml
-apiVersion: api.cerbos.dev/v1
-
-resourcePolicy:
-  resource: fdepApi
-  version: default
-  scope: jev
-
-  rules:
-    # 访客:只能调 systemone 这一族,而且只能查文件
-    - name: guests-may-call-the-systemone-apps
-      actions: ["*"]
+    # 访客:只能调 systemone.LAYA 这一族,而且只能查文件
+    - name: guests-may-read
+      actions: ["*.py"]
       roles: [FDEP_GUEST]
       effect: EFFECT_ALLOW
       condition:
         match:
-          expr: R.id == "systemone" && R.attr.accessMode == "read"
+          expr: R.id == "systemone.LAYA" && (R.attr.accessMode == "read")
 ```
 
 ### 5.2 三个要点
@@ -276,34 +282,44 @@ resourcePolicy:
 | GUEST,id=**systemoneX**,read | DENY ← 精确匹配,没有前缀陷阱 |
 | `accessMode: bogus` | DENY + `value must be one of "read", "execute"]` |
 
-### 5.4 ⚠️ scope 的坑:每个 org 必须有一份 scoped policy
+### 5.4 ⚠️ kind 的坑:每个 org 必须有一份 policy
 
-实测:**请求带了 scope,而 store 里没有这一份 → `NO_MATCH`,基础 policy 根本不被查。**
+实测:**请求带的 kind,store 里没有这一份 → `NO_MATCH`,答案说的是「没找到 policy」
+而不是「不允许」。**
 
-| 请求 | 结果 |
-|---|---|
-| scope=`jev`(有这份 policy) | 按 jev 的规则判 |
-| scope=`other`(**没有**这份 policy) | **NO_MATCH** → 全部拒绝 |
-| scope=`jev.child`(jev 有,jev.child 没有) | **NO_MATCH** → 全部拒绝 |
+| 请求 | store 里有什么 | 结果 |
+|---|---|---|
+| kind=`pip.JEV.LAYA` | 一份 | 按那一份的规则判 |
+| kind=`pip.nosuch.org` | 没有 | **NO_MATCH** → 全部拒绝 |
 
-**所以:新增一个 org(在 FDEP 的 `ToT` map 里加一条),如果没同时加一份 scoped policy,
-那个 org 的所有调用都会被拒** —— 而且报错是 NO_MATCH,不是「权限不足」。
+**没有链。** provider 就是一个 kind,一份 policy,推上去就是完整的 ——
+不存在「链断着」「缺一层」「补不回来」这些情况。
 
-两个缓解手段:
+> 这是放弃 scope 换来的:scope 是层级,层级就要每一级都有 policy,
+> 而 PDP 不让删有后代的层(`400 breaksScopeChain`),想精简也精简不掉。
+> 改用 kind 之后实测:冒号 kind **不需要祖先 kind**,不带 scope 的请求由
+> (kind, "") 那一份应答 —— 就是那一份。
 
-1. **PDP 打开 `engine.lenientScopeSearch: true`**(官方引擎配置)。
-   开启后,请求的 scope 没有对应 policy 时,会按 `a.b` → `a` → `""` 继续找,
-   而不是直接 NO_MATCH。
+**所以:新增一个 org(在 FDEP 的 `ToT` map 里加一条),要加的是一份 policy** ——
+漏了,那个 org 的所有调用都会被拒,报错是 NO_MATCH,不是「权限不足」。
 
-   > 但注意官方说明:**这个设置只影响「缺失叶子 scope」的处理**。
+原来的两个缓解手段现在都不需要了:
+
+1. ~~**PDP 打开 `engine.lenientScopeSearch: true`**~~ —— 没有 scope 层级了。
+   > 官方说明:**这个设置只影响「缺失叶子 scope」的处理**;
    > store 里已存在的 scope 链**必须完整** —— 有 `a.b.c` 就必须也有 `a.b`、`a` 和无 scope 的。
+   >
+   > ⚠️ 开启后,一个完全没配过的 org 也会落到基础 policy,`NO_MATCH` 这个诊断就没了。
+   > 本项目**没有启用**它(要改配置并重启共享 PDP)—— 见 `PLAN.md` §3.6。
 
-2. **部署流程把「新增 org」和「新增 scoped policy」绑在一起** —— 见 §8。
+2. **部署流程把「新增 org」和「新增整条链」绑在一起** —— 见 §8。
+   `pdp-config/gen-scoped-policies.py` 从 `pdp-config/orgs.yaml` 生成整条链,
+   `--verify` 查 store 里链是不是完整。
 
 ### 5.5 schema:只要 resource 的一份
 
 ```json
-// _schemas/fdepApi.json
+// _schemas/fdep.json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
@@ -317,6 +333,7 @@ resourcePolicy:
 ```
 
 **为什么要 schema**:policy 的 condition 依赖 `accessMode` / `riskLevel`。
+(属性关掉的时候 schema 也不声明 —— schema 本身就是 `R.attr` 的一个功能。)
 没有 schema,这些字段缺失时是**运行时错误** → condition 视为不满足 → **静默拒绝**。
 schema 让「字段缺失」变成明确的校验错误,而不是悄悄的拒绝。
 
@@ -324,7 +341,7 @@ schema 让「字段缺失」变成明确的校验错误,而不是悄悄的拒绝
 只用于审计,不被 condition 分支;而且 `additionalProperties: false` 会让 FDEP 以后加字段时
 突然全部被拒(这个坑本项目已经踩过)。
 
-> ⚠️ **部署 schema 时 id 用相对路径**(`fdepApi.json`),**不是** `cerbos:///fdepApi.json`。
+> ⚠️ **部署 schema 时 id 用相对路径**(`fdep.json`),**不是** `cerbos:///fdep.json`。
 > store 存的是相对路径,策略里的 `ref` 才带前缀。
 > **推错的后果:「看起来部署成功了」但每个请求都被拒,而且那行读不回来**
 > (`GET /admin/schema?id=...` 各种前缀组合都 500)。本项目已经踩过一次。
@@ -399,7 +416,7 @@ FDEP 在请求里带 `requestContext.annotations`:
 ### 7.1 pipe.py 的 `One.exec`
 
 ```python
-# app id = "@jev.systemone.Choice" -> scope=jev, id=systemone, action=Choice
+# app id = "@jev.systemone.LAYA.Choice" -> kind=pip.JEV.LAYA, id=systemone.LAYA, action=Choice
 org, rest = app_id[1:].split(".", 1)      # "jev", "systemone.Choice"
 app, operation = rest.rsplit(".", 1)      # "systemone", "Choice"
 
@@ -431,8 +448,8 @@ if effect != "ALLOW":
 result = runWF(...)           # 原有流程不动
 ```
 
-**scope 一定要带上。** 漏了 scope 会走到无 scope 的基础 policy(它也在链上),
-但**带 scope 而 store 里没有对应 policy 时是 NO_MATCH → 全部拒绝**(见 §5.4)。
+**kind 一定要带上。** 它是 provider 的身份 —— 漏了就不知道该问哪一份 policy,
+而 store 里没有这个 kind 时是 NO_MATCH → 全部拒绝(见 §5.4)。
 
 ### 7.2 用 SDK,不用裸 HTTP
 
@@ -490,15 +507,14 @@ SDK 的 gRPC 客户端需要额外安装 `cerbos[grpc]`(本机没有 `grpcio`)�
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | `fdepApi.yaml` | **基础 policy**(无 scope),§5.1 的三条通用规则 |
-| 2 | `fdepApi.jev.yaml` | **scope: jev** 的 policy,guest 规则在这 |
-| 3 | `fdepApi.json` | schema(§5.5) |
-| 4 | `fdepApi_test.yaml` | 原生测试套件 —— **期望的唯一真源** |
+| 1 | `pip.JEV.LAYA.yaml` | **每个 provider 一份**:通用规则 + 各家族的规则。**由 `pdp-config/gen-scoped-policies.py` 生成,不要手改** |
+| 3 | `fdep.json` | schema(§5.5) |
+| 4 | `pip.JEV.LAYA_test.yaml` 等 | 原生测试套件 —— **期望的唯一真源** |
 | 5 | `testdata/{principals,resources}.yaml` | 共享 fixtures |
-| 6 | 部署 | `POST /admin/schema` + `POST /admin/policy` |
-| 7 | 验证 | `GET /admin/policies` 看清单(要有 `fdepApi.vdefault` **和** `fdepApi.vdefault/jev`);跑测试套件 |
+| 6 | 部署 | `POST /admin/schema` + `POST /admin/policy`(**一批发完整条链**) |
+| 7 | 验证 | `GET /admin/policies` 看清单(要有每个 provider 一份);跑测试套件 |
 
-**第 7 项的「和」字很要紧** —— 少了 scoped 那份,所有带 scope 的请求都是 NO_MATCH。
+**第 7 项现在没有「和」了** —— 一个 provider 一份 policy,推上去就是完整的。
 
 **schema 的 id 用相对路径**(§5.2)。
 
@@ -537,7 +553,7 @@ SDK 的 gRPC 客户端需要额外安装 `cerbos[grpc]`(本机没有 `grpcio`)�
 | **审计响应是 NDJSON** | `response.json()` 抛 `Extra data` | 逐行解析 |
 | **`DELETE /admin/policy` 是停用不是删除** | 停用项仍在清单里 | 用 `POST /admin/policy/delete` |
 | **策略文件扩展名不被接受时静默忽略** | 策略不生效 | 用 `.yaml` / `.yml` / `.json` |
-| **带 scope 但 store 里没有对应 policy** | **NO_MATCH → 全部拒绝**,基础 policy 也不被查 | 每个 org 一份 scoped policy;或开 `engine.lenientScopeSearch` |
+| **store 里没有这个 kind 的 policy** | **NO_MATCH → 全部拒绝** | 每个 provider 一份 policy |
 | **`strictEvaluation` 默认关** | 条件写错的 `EFFECT_DENY` 规则会被静默跳过 | 建议开 `engine.strictEvaluation: true`(要改配置并重启) |
 
 ---
@@ -551,8 +567,8 @@ SDK 的 gRPC 客户端需要额外安装 `cerbos[grpc]`(本机没有 `grpcio`)�
 | 3 | app 注册表现在在哪?谁维护? | 决定控制栏位怎么取得 |
 | 4 | pipe.py 上层怎么把异常转成 HTTP 响应? | 决定 403 / 503 怎么送出 |
 | 5 | PDP 策略只存在 sqlite3,备援是什么? | PDP 挂掉时闸门会全拒绝(安全但不可用) |
-| 6 | 与 4KI `rbac.md` 的 R1..R8 怎么对应? | 角色体系 |
-| 7 | 每个 org 一份 scoped policy,谁负责同步? | 漏一份 → 那个 org 全断(§5.4) |
+| 6 | 与外部权限矩阵的 R1..R8 怎么对应? | 角色体系 |
+| 7 | 每个 org 一份 policy,谁负责同步? | 漏一份 → 那个 org 全断(§5.4) |
 | 8 | 要不要开 `engine.lenientScopeSearch` / `engine.strictEvaluation`? | 都要改配置并重启共享 PDP |
 
 ---

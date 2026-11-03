@@ -15,7 +15,7 @@ def main() -> None:
     import httpx
 
     from cerbos_policy_tests.client import admin_headers, build_client, pdp_url
-    from cerbos_policy_tests.config import POLICY_DIR
+    from cerbos_policy_tests.config import BASIC_RESOURCE_POLICY_DIR
     from cerbos_policy_tests.fixtures import load_fixtures
     from cerbos_policy_tests.pep import PdpError, PdpUnavailable, authorize
 
@@ -31,7 +31,7 @@ def main() -> None:
     ).json()
     print(f"  policies: {listed.get('policyIds')}")
 
-    fixtures = load_fixtures(POLICY_DIR)
+    fixtures = load_fixtures(BASIC_RESOURCE_POLICY_DIR)
     print(f"  fixtures: {len(fixtures.principals)} principals, {len(fixtures.resources)} resources")
 
     try:

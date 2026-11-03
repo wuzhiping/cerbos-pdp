@@ -8,7 +8,11 @@ from __future__ import annotations
 import pytest
 
 from cerbos_policy_tests.client import build_client
-from cerbos_policy_tests.config import COVERAGE_PLAN, POLICY_DIR
+from cerbos_policy_tests.config import (
+    BASIC_RESOURCE_POLICY_DIR,
+    COVERAGE_PLAN,
+    POLICY_DIR,
+)
 from cerbos_policy_tests.fixtures import load_fixtures
 from cerbos_policy_tests.nativesuite import find_suites, load_suite
 from cerbos_policy_tests.testplan import load_plan
@@ -23,16 +27,30 @@ def client():
 
 @pytest.fixture(scope="session")
 def fixtures():
-    """Principal and resource fixtures loaded from `policies/**/testdata/`."""
-    return load_fixtures(POLICY_DIR)
+    """The basicResource family's principal and resource fixtures.
+
+    The coverage plan and the exhaustive sweep describe basicResource, so
+    this fixture is that family's set. Each policy family owns its own
+    `testdata/`; a family that shares one with another would have its
+    expectations silently answered with the wrong fixtures.
+    """
+    return load_fixtures(BASIC_RESOURCE_POLICY_DIR)
+
+
+@pytest.fixture(scope="session")
+def suites():
+    """Every native `*_test.yaml` suite under the policy directory."""
+    found = find_suites(POLICY_DIR)
+    assert found, f"no *_test.yaml suite found under {POLICY_DIR}"
+    return [(path, load_suite(path)) for path in found]
 
 
 @pytest.fixture(scope="session")
 def suite():
-    """The native `*_test.yaml` suite, expanded into assertions."""
-    suites = find_suites(POLICY_DIR)
-    assert suites, f"no *_test.yaml suite found under {POLICY_DIR}"
-    return load_suite(suites[0])
+    """The first native suite, for the tests that are about one of them."""
+    found = find_suites(POLICY_DIR)
+    assert found, f"no *_test.yaml suite found under {POLICY_DIR}"
+    return load_suite(found[0])
 
 
 @pytest.fixture(scope="session")

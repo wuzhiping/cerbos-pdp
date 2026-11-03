@@ -50,6 +50,25 @@ class Suite:
             grouped.setdefault(case.test, []).append(case)
         return {name: tuple(items) for name, items in grouped.items()}
 
+    @property
+    def kind(self) -> str:
+        """The resource kind this suite exercises, taken from its file name.
+
+        Cerbos names a suite after the policy it tests — `<resource>_test.yaml`
+        — and the harness needs the kind to know which reference model to
+        compare the expectations against.
+        """
+        name = self.path.name
+        suffix = "_test.yaml"
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+        return self.path.stem
+
+    @property
+    def policy_dir(self) -> Path:
+        """The directory that owns this suite — and its `testdata/`."""
+        return self.path.parent
+
 
 def _expected_map(test: Mapping[str, Any]) -> dict[tuple[str, str], dict[str, str]]:
     """Resolve the `expected` block into {(principal, resource): {action: effect}}."""
